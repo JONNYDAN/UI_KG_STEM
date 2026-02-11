@@ -18,7 +18,7 @@ export const baseNavData: NavItem[] = [
   {
     title: 'Truy vấn STEM',
     path: '/stem/query',
-    icon: icon('ic-search'),
+    icon: icon('majesticons--search'),
   },
 ];
 
@@ -31,14 +31,12 @@ const createRoleBasedNavItems = (userRole: string): NavItem[] => {
     items.push({
       title: 'Xem Logs Truy vấn',
       path: '/stem/admin',
-      icon: icon('ic-analytics'),
-      role: userRole,
+      icon: icon('majesticons--checkbox-list-detail-line'),
     });
     items.push({
       title: 'Quản lý Entities',
       path: '/stem/entities',
-      icon: icon('ic-user'),
-      role: userRole,
+      icon: icon('majesticons--settings-cog-line'),
     });
   }
 

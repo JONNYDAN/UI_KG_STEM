@@ -1,8 +1,6 @@
 ## UI KNOWLEDGE GRAPH QUERY
 
-![license](https://img.shields.io/badge/license-MIT-blue.svg)
-
-![preview](public/assets/images/minimal-free-preview.jpg)
+![preview](public/assets/images/Demo-UI.png)
 
 ## Quick start
 
