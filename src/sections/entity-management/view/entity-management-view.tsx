@@ -1,0 +1,792 @@
+import { useState, useEffect } from 'react';
+
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import {
+  Container,
+  Typography,
+  Box,
+  Tabs,
+  Tab,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Alert,
+} from '@mui/material';
+
+import * as entityService from '../../../services/entityService';
+
+import type {
+  RootCategory,
+  Category,
+  RootSubject,
+  Subject,
+  Relationship,
+  Diagram,
+} from '../../../services/entityService';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div role="tabpanel" hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+export default function EntityManagementView() {
+  const [tabValue, setTabValue] = useState(0);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // State for each entity type
+  const [rootCategories, setRootCategories] = useState<RootCategory[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [rootSubjects, setRootSubjects] = useState<RootSubject[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [diagrams, setDiagrams] = useState<Diagram[]>([]);
+
+  // Dialog states
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [currentEntity, setCurrentEntity] = useState<any>(null);
+
+  // Load data
+  const loadRootCategories = async () => {
+    try {
+      const response = await entityService.getRootCategories();
+      setRootCategories(response.data);
+    } catch (err: any) {
+      setError('Failed to load root categories');
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const response = await entityService.getCategories();
+      setCategories(response.data);
+    } catch (err: any) {
+      setError('Failed to load categories');
+    }
+  };
+
+  const loadRootSubjects = async () => {
+    try {
+      const response = await entityService.getRootSubjects();
+      setRootSubjects(response.data);
+    } catch (err: any) {
+      setError('Failed to load root subjects');
+    }
+  };
+
+  const loadSubjects = async () => {
+    try {
+      const response = await entityService.getSubjects();
+      setSubjects(response.data);
+    } catch (err: any) {
+      setError('Failed to load subjects');
+    }
+  };
+
+  const loadRelationships = async () => {
+    try {
+      const response = await entityService.getRelationships();
+      setRelationships(response.data);
+    } catch (err: any) {
+      setError('Failed to load relationships');
+    }
+  };
+
+  const loadDiagrams = async () => {
+    try {
+      const response = await entityService.getDiagrams();
+      setDiagrams(response.data);
+    } catch (err: any) {
+      setError('Failed to load diagrams');
+    }
+  };
+
+  useEffect(() => {
+    loadRootCategories();
+    loadCategories();
+    loadRootSubjects();
+    loadSubjects();
+    loadRelationships();
+    loadDiagrams();
+  }, []);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleOpenDialog = (mode: 'create' | 'edit', entity?: any) => {
+    setDialogMode(mode);
+    setCurrentEntity(entity || {});
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setCurrentEntity(null);
+  };
+
+  const handleSave = async () => {
+    try {
+      if (tabValue === 0) {
+        // RootCategory
+        if (dialogMode === 'create') {
+          await entityService.createRootCategory(currentEntity);
+        } else {
+          await entityService.updateRootCategory(currentEntity.id, currentEntity);
+        }
+        await loadRootCategories();
+        setSuccess('Root Category saved successfully');
+      } else if (tabValue === 1) {
+        // Category
+        if (dialogMode === 'create') {
+          await entityService.createCategory(currentEntity);
+        } else {
+          await entityService.updateCategory(currentEntity.id, currentEntity);
+        }
+        await loadCategories();
+        setSuccess('Category saved successfully');
+      } else if (tabValue === 2) {
+        // RootSubject
+        if (dialogMode === 'create') {
+          await entityService.createRootSubject(currentEntity);
+        } else {
+          await entityService.updateRootSubject(currentEntity.id, currentEntity);
+        }
+        await loadRootSubjects();
+        setSuccess('Root Subject saved successfully');
+      } else if (tabValue === 3) {
+        // Subject
+        if (dialogMode === 'create') {
+          await entityService.createSubject(currentEntity);
+        } else {
+          await entityService.updateSubject(currentEntity.id, currentEntity);
+        }
+        await loadSubjects();
+        setSuccess('Subject saved successfully');
+      } else if (tabValue === 4) {
+        // Relationship
+        if (dialogMode === 'create') {
+          await entityService.createRelationship(currentEntity);
+        } else {
+          await entityService.updateRelationship(currentEntity.id, currentEntity);
+        }
+        await loadRelationships();
+        setSuccess('Relationship saved successfully');
+      } else if (tabValue === 5) {
+        // Diagram
+        if (dialogMode === 'create') {
+          await entityService.createDiagram(currentEntity);
+        } else {
+          await entityService.updateDiagram(currentEntity.id, currentEntity);
+        }
+        await loadDiagrams();
+        setSuccess('Diagram saved successfully');
+      }
+      handleCloseDialog();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to save entity');
+    }
+  };
+
+  const handleDelete = async (id: string | number, type: string) => {
+    if (!window.confirm('Are you sure you want to delete this item?')) return;
+
+    try {
+      if (type === 'rootCategory') {
+        await entityService.deleteRootCategory(id as string);
+        await loadRootCategories();
+      } else if (type === 'category') {
+        await entityService.deleteCategory(id as number);
+        await loadCategories();
+      } else if (type === 'rootSubject') {
+        await entityService.deleteRootSubject(id as number);
+        await loadRootSubjects();
+      } else if (type === 'subject') {
+        await entityService.deleteSubject(id as number);
+        await loadSubjects();
+      } else if (type === 'relationship') {
+        await entityService.deleteRelationship(id as number);
+        await loadRelationships();
+      } else if (type === 'diagram') {
+        await entityService.deleteDiagram(id as string);
+        await loadDiagrams();
+      }
+      setSuccess('Entity deleted successfully');
+    } catch (err: any) {
+      setError('Failed to delete entity');
+    }
+  };
+
+  const renderEntityForm = () => {
+    if (!currentEntity) return null;
+
+    const handleFieldChange = (field: string, value: any) => {
+      setCurrentEntity({ ...currentEntity, [field]: value });
+    };
+
+    if (tabValue === 0) {
+      // RootCategory form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="ID"
+            value={currentEntity.id || ''}
+            onChange={(e) => handleFieldChange('id', e.target.value)}
+            disabled={dialogMode === 'edit'}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Name"
+            value={currentEntity.name || ''}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={currentEntity.description || ''}
+            onChange={(e) => handleFieldChange('description', e.target.value)}
+            margin="normal"
+            multiline
+            rows={3}
+          />
+        </>
+      );
+    }
+
+    if (tabValue === 1) {
+      // Category form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="Code"
+            value={currentEntity.code || ''}
+            onChange={(e) => handleFieldChange('code', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Name"
+            value={currentEntity.name || ''}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Root Category ID"
+            value={currentEntity.root_category_id || ''}
+            onChange={(e) => handleFieldChange('root_category_id', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Level"
+            type="number"
+            value={currentEntity.level || 1}
+            onChange={(e) => handleFieldChange('level', parseInt(e.target.value))}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={currentEntity.description || ''}
+            onChange={(e) => handleFieldChange('description', e.target.value)}
+            margin="normal"
+            multiline
+            rows={3}
+          />
+        </>
+      );
+    }
+
+    if (tabValue === 2) {
+      // RootSubject form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="Name"
+            value={currentEntity.name || ''}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={currentEntity.description || ''}
+            onChange={(e) => handleFieldChange('description', e.target.value)}
+            margin="normal"
+            multiline
+            rows={3}
+          />
+          <TextField
+            fullWidth
+            label="Parent ID"
+            type="number"
+            value={currentEntity.parent_id || ''}
+            onChange={(e) => handleFieldChange('parent_id', e.target.value ? parseInt(e.target.value) : null)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Level"
+            type="number"
+            value={currentEntity.level || 0}
+            onChange={(e) => handleFieldChange('level', parseInt(e.target.value))}
+            margin="normal"
+          />
+        </>
+      );
+    }
+
+    if (tabValue === 3) {
+      // Subject form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="Code"
+            value={currentEntity.code || ''}
+            onChange={(e) => handleFieldChange('code', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Name"
+            value={currentEntity.name || ''}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Root Subject ID"
+            type="number"
+            value={currentEntity.root_subject_id || ''}
+            onChange={(e) => handleFieldChange('root_subject_id', e.target.value ? parseInt(e.target.value) : null)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={currentEntity.description || ''}
+            onChange={(e) => handleFieldChange('description', e.target.value)}
+            margin="normal"
+            multiline
+            rows={3}
+          />
+        </>
+      );
+    }
+
+    if (tabValue === 4) {
+      // Relationship form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="Code"
+            value={currentEntity.code || ''}
+            onChange={(e) => handleFieldChange('code', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Name"
+            value={currentEntity.name || ''}
+            onChange={(e) => handleFieldChange('name', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Description"
+            value={currentEntity.description || ''}
+            onChange={(e) => handleFieldChange('description', e.target.value)}
+            margin="normal"
+            multiline
+            rows={3}
+          />
+          <TextField
+            fullWidth
+            label="Inverse Relationship"
+            value={currentEntity.inverse_relationship || ''}
+            onChange={(e) => handleFieldChange('inverse_relationship', e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Semantic Type"
+            value={currentEntity.semantic_type || ''}
+            onChange={(e) => handleFieldChange('semantic_type', e.target.value)}
+            margin="normal"
+          />
+        </>
+      );
+    }
+
+    if (tabValue === 5) {
+      // Diagram form
+      return (
+        <>
+          <TextField
+            fullWidth
+            label="ID"
+            value={currentEntity.id || ''}
+            onChange={(e) => handleFieldChange('id', e.target.value)}
+            disabled={dialogMode === 'edit'}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Category ID"
+            type="number"
+            value={currentEntity.category_id || ''}
+            onChange={(e) => handleFieldChange('category_id', e.target.value ? parseInt(e.target.value) : null)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Image Path"
+            value={currentEntity.image_path || ''}
+            onChange={(e) => handleFieldChange('image_path', e.target.value)}
+            margin="normal"
+          />
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <Container maxWidth="xl">
+      <Typography variant="h4" sx={{ mb: 3 }}>
+        Entity Management
+      </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
+      )}
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Root Categories" />
+          <Tab label="Categories" />
+          <Tab label="Root Subjects" />
+          <Tab label="Subjects" />
+          <Tab label="Relationships" />
+          <Tab label="Diagrams" />
+        </Tabs>
+      </Box>
+
+      {/* Root Categories */}
+      <TabPanel value={tabValue} index={0}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Root Category
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rootCategories.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'rootCategory')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Categories */}
+      <TabPanel value={tabValue} index={1}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Category
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Code</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Root Category ID</TableCell>
+                <TableCell>Level</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {categories.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.code}</TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>{item.root_category_id}</TableCell>
+                  <TableCell>{item.level}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'category')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Root Subjects */}
+      <TabPanel value={tabValue} index={2}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Root Subject
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Parent ID</TableCell>
+                <TableCell>Level</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rootSubjects.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{item.parent_id}</TableCell>
+                  <TableCell>{item.level}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'rootSubject')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Subjects */}
+      <TabPanel value={tabValue} index={3}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Subject
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Code</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Root Subject ID</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {subjects.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.code}</TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>{item.root_subject_id}</TableCell>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'subject')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Relationships */}
+      <TabPanel value={tabValue} index={4}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Relationship
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Code</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Semantic Type</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {relationships.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.code}</TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{item.semantic_type}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'relationship')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Diagrams */}
+      <TabPanel value={tabValue} index={5}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog('create')}
+          sx={{ mb: 2 }}
+        >
+          Add Diagram
+        </Button>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Category ID</TableCell>
+                <TableCell>Image Path</TableCell>
+                <TableCell>Processed</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {diagrams.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.category_id}</TableCell>
+                  <TableCell>{item.image_path}</TableCell>
+                  <TableCell>{item.processed ? 'Yes' : 'No'}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpenDialog('edit', item)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(item.id, 'diagram')}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      {/* Edit/Create Dialog */}
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{dialogMode === 'create' ? 'Create' : 'Edit'} Entity</DialogTitle>
+        <DialogContent>{renderEntityForm()}</DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleSave} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
+  );
+}
