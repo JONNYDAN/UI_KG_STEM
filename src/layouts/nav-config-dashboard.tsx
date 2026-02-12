@@ -38,6 +38,11 @@ const createRoleBasedNavItems = (userRole: string): NavItem[] => {
       path: '/stem/entities',
       icon: icon('majesticons--settings-cog-line'),
     });
+    items.push({
+      title: 'Quản lý Bộ 3 (S-R-O)',
+      path: '/stem/triples',
+      icon: icon('majesticons--link'),
+    });
   }
 
   return items;

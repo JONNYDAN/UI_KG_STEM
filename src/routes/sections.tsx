@@ -18,6 +18,7 @@ export const SignUpPage = lazy(() => import('src/pages/sign-up'));
 export const StemQueryPage = lazy(() => import('src/pages/stem-query'));
 export const StemAdminPage = lazy(() => import('src/pages/stem-admin'));
 export const EntityManagementPage = lazy(() => import('src/pages/entity-management'));
+export const SROManagementPage = lazy(() => import('src/pages/sro-management'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 
 const renderFallback = () => (
@@ -85,6 +86,15 @@ export const routesSection: RouteObject[] = [
         element: (
           <ProtectedRoute requiredRoles={['admin', 'ADMIN']}>
             <EntityManagementPage />
+          </ProtectedRoute>
+        ),
+      },
+      // SRO Management - Triple Management Interface
+      {
+        path: 'stem/triples',
+        element: (
+          <ProtectedRoute requiredRoles={['admin', 'ADMIN']}>
+            <SROManagementPage />
           </ProtectedRoute>
         ),
       },

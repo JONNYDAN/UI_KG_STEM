@@ -81,6 +81,21 @@ export default function EntityManagementView() {
     return (compact + 'XXX').slice(0, 3);
   };
 
+  const deriveRelationshipCode = (semanticType?: string, name?: string) => {
+    if (!name) return '';
+    // Clean and uppercase the name
+    const nameClean = name.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    // If semantic_type is provided, use it as prefix
+    if (semanticType) {
+      const typeClean = semanticType.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      // Get first 3 letters of semantic type
+      const typePrefix = typeClean.substring(0, 3);
+      return `${typePrefix}-${nameClean}`;
+    }
+    // If no semantic type, just return the clean name
+    return nameClean;
+  };
+
   const getRootCategoryCode = (rootCategoryId?: string) => {
     if (!rootCategoryId) return '';
     const root = rootCategories.find((item) => item.id === rootCategoryId);
@@ -246,10 +261,14 @@ export default function EntityManagementView() {
         setSuccess('Subject saved successfully');
       } else if (tabValue === 4) {
         // Relationship
+        const relationshipData = { ...currentEntity };
+        // Let backend auto-generate code when updating
         if (dialogMode === 'create') {
-          await entityService.createRelationship(currentEntity);
+          await entityService.createRelationship(relationshipData);
         } else {
-          await entityService.updateRelationship(currentEntity.id, currentEntity);
+          // Remove code field for update to allow backend to regenerate
+          delete relationshipData.code;
+          await entityService.updateRelationship(currentEntity.id, relationshipData);
         }
         await loadRelationships();
         setSuccess('Relationship saved successfully');
@@ -521,11 +540,10 @@ export default function EntityManagementView() {
           <TextField
             fullWidth
             label="Code"
-            value={currentEntity.code || ''}
+            value={currentEntity.code || deriveRelationshipCode(currentEntity.semantic_type, currentEntity.name)}
             onChange={(e) => handleFieldChange('code', e.target.value)}
             margin="normal"
-            disabled
-            helperText="Auto-generated"
+            helperText="Auto-generated from Semantic Type + Name. Leave empty to auto-generate"
           />
           <TextField
             fullWidth
@@ -533,6 +551,15 @@ export default function EntityManagementView() {
             value={currentEntity.name || ''}
             onChange={(e) => handleFieldChange('name', e.target.value)}
             margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Semantic Type"
+            value={currentEntity.semantic_type || ''}
+            onChange={(e) => handleFieldChange('semantic_type', e.target.value)}
+            margin="normal"
+            placeholder="e.g., trophic, spatial, temporal"
+            helperText="Used to generate relationship code"
           />
           <TextField
             fullWidth
@@ -550,13 +577,11 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('inverse_relationship', e.target.value)}
             margin="normal"
           />
-          <TextField
-            fullWidth
-            label="Semantic Type"
-            value={currentEntity.semantic_type || ''}
-            onChange={(e) => handleFieldChange('semantic_type', e.target.value)}
-            margin="normal"
-          />
+          {currentEntity.name && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Generated Code Preview: <strong>{deriveRelationshipCode(currentEntity.semantic_type, currentEntity.name)}</strong>
+            </Alert>
+          )}
         </>
       );
     }
