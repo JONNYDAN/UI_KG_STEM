@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export interface RootCategory {
   id: string;
+  code?: string;
   name: string;
   description?: string;
   created_at?: string;
@@ -11,7 +12,7 @@ export interface RootCategory {
 
 export interface Category {
   id: number;
-  code: string;
+  code?: string;
   name: string;
   root_category_id?: string;
   level?: number;
@@ -22,6 +23,7 @@ export interface Category {
 
 export interface RootSubject {
   id: number;
+  code?: string;
   name: string;
   description?: string;
   parent_id?: number;
@@ -30,7 +32,7 @@ export interface RootSubject {
 
 export interface Subject {
   id: number;
-  code: string;
+  code?: string;
   name: string;
   root_subject_id?: number;
   synonyms?: string[];
@@ -41,7 +43,7 @@ export interface Subject {
 
 export interface Relationship {
   id: number;
-  code: string;
+  code?: string;
   name: string;
   description?: string;
   inverse_relationship?: string;

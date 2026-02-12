@@ -22,6 +22,7 @@ import {
   DialogActions,
   TextField,
   Alert,
+  MenuItem,
 } from '@mui/material';
 
 import * as entityService from '../../../services/entityService';
@@ -67,6 +68,55 @@ export default function EntityManagementView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [currentEntity, setCurrentEntity] = useState<any>(null);
+
+  const deriveRootCode = (rawValue?: string) => {
+    if (!rawValue) return '';
+    const value = rawValue.trim();
+    if (/^[A-Z0-9_]{1,6}$/.test(value)) return value;
+    const parts = value.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    const initials = parts.map((part) => part[0]).join('');
+    if (initials.length >= 3) return initials.toUpperCase();
+    const compact = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (compact.length >= 3) return compact.slice(0, 3);
+    return (compact + 'XXX').slice(0, 3);
+  };
+
+  const getRootCategoryCode = (rootCategoryId?: string) => {
+    if (!rootCategoryId) return '';
+    const root = rootCategories.find((item) => item.id === rootCategoryId);
+    return root?.code || root?.id || '';
+  };
+
+  const getRootSubjectCode = (rootSubjectId?: number) => {
+    if (!rootSubjectId) return '';
+    const root = rootSubjects.find((item) => item.id === rootSubjectId);
+    return root?.code || '';
+  };
+
+  const computeCategoryCode = (rootCategoryId?: string, level?: number) => {
+    const rootCode = getRootCategoryCode(rootCategoryId);
+    const normalizedLevel = level ?? 1;
+    if (!rootCode) return '';
+    return `CAT-${rootCode}-${normalizedLevel}`;
+  };
+
+  const computeNextSubjectCode = (rootSubjectId?: number, existingCode?: string) => {
+    const rootCode = getRootSubjectCode(rootSubjectId);
+    if (!rootCode) return '';
+    if (existingCode && existingCode.startsWith(`SUB-${rootCode}-`)) {
+      return existingCode;
+    }
+    const prefix = `SUB-${rootCode}-`;
+    const maxSeq = subjects.reduce((maxValue, item) => {
+      if (!item.code || !item.code.startsWith(prefix)) return maxValue;
+      const suffix = item.code.slice(prefix.length);
+      const seq = Number.parseInt(suffix, 10);
+      if (Number.isNaN(seq)) return maxValue;
+      return Math.max(maxValue, seq);
+    }, 0);
+    const nextSeq = maxSeq + 1;
+    return `${prefix}${String(nextSeq).padStart(3, '0')}`;
+  };
 
   // Load data
   const loadRootCategories = async () => {
@@ -140,7 +190,14 @@ export default function EntityManagementView() {
 
   const handleOpenDialog = (mode: 'create' | 'edit', entity?: any) => {
     setDialogMode(mode);
-    setCurrentEntity(entity || {});
+    const nextEntity = entity ? { ...entity } : {};
+    if (tabValue === 0 && !nextEntity.code) {
+      nextEntity.code = deriveRootCode(nextEntity.id || nextEntity.name || '');
+    }
+    if (tabValue === 2 && !nextEntity.code) {
+      nextEntity.code = deriveRootCode(nextEntity.name || '');
+    }
+    setCurrentEntity(nextEntity);
     setDialogOpen(true);
   };
 
@@ -245,7 +302,24 @@ export default function EntityManagementView() {
     if (!currentEntity) return null;
 
     const handleFieldChange = (field: string, value: any) => {
-      setCurrentEntity({ ...currentEntity, [field]: value });
+      const nextEntity = { ...currentEntity, [field]: value };
+      if (tabValue === 0 && (field === 'id' || field === 'name')) {
+        if (!nextEntity.code || nextEntity.code === deriveRootCode(currentEntity?.id || currentEntity?.name || '')) {
+          nextEntity.code = deriveRootCode(nextEntity.id || nextEntity.name || '');
+        }
+      }
+      if (tabValue === 2 && field === 'name') {
+        if (!nextEntity.code || nextEntity.code === deriveRootCode(currentEntity?.name || '')) {
+          nextEntity.code = deriveRootCode(nextEntity.name || '');
+        }
+      }
+      if (tabValue === 1 && (field === 'root_category_id' || field === 'level')) {
+        nextEntity.code = computeCategoryCode(nextEntity.root_category_id, nextEntity.level);
+      }
+      if (tabValue === 3 && field === 'root_subject_id') {
+        nextEntity.code = computeNextSubjectCode(nextEntity.root_subject_id, nextEntity.code);
+      }
+      setCurrentEntity(nextEntity);
     };
 
     if (tabValue === 0) {
@@ -259,6 +333,14 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('id', e.target.value)}
             disabled={dialogMode === 'edit'}
             margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Code"
+            value={currentEntity.code || ''}
+            onChange={(e) => handleFieldChange('code', e.target.value)}
+            margin="normal"
+            helperText="Optional. Leave empty to auto-generate"
           />
           <TextField
             fullWidth
@@ -290,6 +372,8 @@ export default function EntityManagementView() {
             value={currentEntity.code || ''}
             onChange={(e) => handleFieldChange('code', e.target.value)}
             margin="normal"
+            disabled
+            helperText="Auto-generated from Root Category + Level"
           />
           <TextField
             fullWidth
@@ -300,11 +384,19 @@ export default function EntityManagementView() {
           />
           <TextField
             fullWidth
-            label="Root Category ID"
+            select
+            label="Root Category"
             value={currentEntity.root_category_id || ''}
             onChange={(e) => handleFieldChange('root_category_id', e.target.value)}
             margin="normal"
-          />
+            helperText="Select a root category"
+          >
+            {rootCategories.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.code || item.id} - {item.name}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             fullWidth
             label="Level"
@@ -330,6 +422,14 @@ export default function EntityManagementView() {
       // RootSubject form
       return (
         <>
+          <TextField
+            fullWidth
+            label="Code"
+            value={currentEntity.code || ''}
+            onChange={(e) => handleFieldChange('code', e.target.value)}
+            margin="normal"
+            helperText="Optional. Leave empty to auto-generate from name"
+          />
           <TextField
             fullWidth
             label="Name"
@@ -376,6 +476,8 @@ export default function EntityManagementView() {
             value={currentEntity.code || ''}
             onChange={(e) => handleFieldChange('code', e.target.value)}
             margin="normal"
+            disabled
+            helperText="Auto-generated from Root Subject"
           />
           <TextField
             fullWidth
@@ -386,12 +488,19 @@ export default function EntityManagementView() {
           />
           <TextField
             fullWidth
-            label="Root Subject ID"
-            type="number"
+            select
+            label="Root Subject"
             value={currentEntity.root_subject_id || ''}
             onChange={(e) => handleFieldChange('root_subject_id', e.target.value ? parseInt(e.target.value) : null)}
             margin="normal"
-          />
+            helperText="Select a root subject"
+          >
+            {rootSubjects.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.id} - {item.name}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             fullWidth
             label="Description"
@@ -415,6 +524,8 @@ export default function EntityManagementView() {
             value={currentEntity.code || ''}
             onChange={(e) => handleFieldChange('code', e.target.value)}
             margin="normal"
+            disabled
+            helperText="Auto-generated"
           />
           <TextField
             fullWidth
@@ -527,6 +638,7 @@ export default function EntityManagementView() {
             <TableHead>
               <TableRow>
                 <TableCell>ID</TableCell>
+                <TableCell>Code</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Actions</TableCell>
@@ -536,6 +648,7 @@ export default function EntityManagementView() {
               {rootCategories.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.description}</TableCell>
                   <TableCell>
@@ -613,6 +726,7 @@ export default function EntityManagementView() {
             <TableHead>
               <TableRow>
                 <TableCell>ID</TableCell>
+                <TableCell>Code</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell>Parent ID</TableCell>
@@ -624,6 +738,7 @@ export default function EntityManagementView() {
               {rootSubjects.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
+                  <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.description}</TableCell>
                   <TableCell>{item.parent_id}</TableCell>
