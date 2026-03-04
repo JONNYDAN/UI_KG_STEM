@@ -54,10 +54,27 @@ export interface Relationship {
 export interface Diagram {
   id: string;
   category_id?: number;
+  root_category_id?: string;
+  category_name?: string;
+  root_category_name?: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+  trigger_code?: string;
   image_path?: string;
   processed?: boolean;
   diagram_metadata?: any;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface DiagramUploadPayload {
+  root_category_id: string;
+  category_name: string;
+  category_id?: number;
+  diagram_id?: string;
+  processed?: boolean;
+  image: File;
 }
 
 export interface Triple {
@@ -124,6 +141,25 @@ export const updateDiagram = (id: string, data: Partial<Diagram>) =>
   axios.put<Diagram>(`${API_URL}/entities/diagrams/${id}`, data);
 export const deleteDiagram = (id: string) => 
   axios.delete(`${API_URL}/entities/diagrams/${id}`);
+export const uploadDiagram = (payload: DiagramUploadPayload) => {
+  const formData = new FormData();
+  formData.append('root_category_id', payload.root_category_id);
+  formData.append('category_name', payload.category_name);
+  if (payload.category_id !== undefined) {
+    formData.append('category_id', String(payload.category_id));
+  }
+  if (payload.diagram_id) {
+    formData.append('diagram_id', payload.diagram_id);
+  }
+  formData.append('processed', String(payload.processed ?? true));
+  formData.append('image', payload.image);
+
+  return axios.post<Diagram>(`${API_URL}/entities/diagrams/upload`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
 
 // Triple API
 export const getTriples = () => axios.get<Triple[]>(`${API_URL}/entities/triples`);

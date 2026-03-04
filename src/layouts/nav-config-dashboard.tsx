@@ -41,7 +41,7 @@ const createRoleBasedNavItems = (userRole: string): NavItem[] => {
     items.push({
       title: 'Quản lý Bộ 3 (S-R-O)',
       path: '/stem/triples',
-      icon: icon('majesticons--link'),
+      icon: icon('gravity-ui--nodes-right'),
     });
   }
 
