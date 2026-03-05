@@ -3,14 +3,13 @@ import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import Chip from '@mui/material/Chip';
-import List from '@mui/material/List';
+import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
+import Dialog from '@mui/material/Dialog';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
-import ListItem from '@mui/material/ListItem';
-import { useTheme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CardHeader from '@mui/material/CardHeader';
@@ -19,8 +18,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import SearchIcon from '@mui/icons-material/Search';
-import ListItemText from '@mui/material/ListItemText';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import DialogContent from '@mui/material/DialogContent';
 import LinearProgress from '@mui/material/LinearProgress';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -39,8 +37,6 @@ const toAbsoluteUrl = (path?: string | null) => {
 };
 
 export function StemQueryView() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
   
   const [queryText, setQueryText] = useState('');
@@ -49,6 +45,7 @@ export function StemQueryView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [response, setResponse] = useState<any>(null);
+  const [zoomedDiagram, setZoomedDiagram] = useState<any | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
@@ -93,6 +90,7 @@ export function StemQueryView() {
     setImagePreview('');
     setResponse(null);
     setError('');
+    setZoomedDiagram(null);
   };
 
   const diagrams = useMemo(() => {
@@ -107,6 +105,8 @@ export function StemQueryView() {
   }, [response]);
 
   const triplesCount = response?.triples?.length || 0;
+  const finalOutput = response?.final_output;
+  const hasResponse = Boolean(response);
   const descriptionsCount = useMemo(() => {
     if (!response?.query_results) return 0;
     return response.query_results.reduce((total: number, item: any) => 
@@ -120,21 +120,27 @@ export function StemQueryView() {
       p: { xs: 2, sm: 3 },
       display: 'flex',
       flexDirection: 'column',
-      gap: 4
+      gap: 3
     }}>
-      <Typography 
-        variant="h4" 
-        sx={{ 
-          fontWeight: 600,
-          color: theme.palette.primary.main,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1
-        }}
-      >
-        <PsychologyIcon fontSize="large" />
-        Truy vấn Ảnh STEM
-      </Typography>
+      <Card variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack spacing={1}>
+          <Typography
+            variant="h4"
+            sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}
+          >
+            <PsychologyIcon fontSize="large" />
+            Truy vấn Ảnh STEM
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Nhập câu hỏi văn bản, tải ảnh (hoặc cả hai) để hệ thống phân tích và đề xuất diagram phù hợp.
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip size="small" label={`Phase: ${response?.query?.phase || 'idle'}`} />
+            <Chip size="small" label={`Routing: ${response?.query?.routing_mode || 'N/A'}`} />
+            <Chip size="small" label={`Diagrams: ${diagrams.length}`} />
+          </Stack>
+        </Stack>
+      </Card>
 
       <Box sx={{ 
         display: 'flex',
@@ -171,12 +177,12 @@ export function StemQueryView() {
               <Stack spacing={3}>
                 <TextField
                   label="Truy vấn văn bản"
-                  placeholder="Ví dụ: Mercury - orbits - Sun"
+                  placeholder="Ví dụ: Can you explain how the water cycle works?"
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
                   fullWidth
                   multiline
-                  rows={3}
+                  rows={4}
                   disabled={loading}
                   InputProps={{
                     startAdornment: <DescriptionIcon sx={{ mr: 1, color: 'action.active' }} />,
@@ -186,13 +192,13 @@ export function StemQueryView() {
                 <Box>
                   <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <ImageIcon />
-                    Hình ảnh STEM (tùy chọn)
+                    Hình ảnh minh họa
                   </Typography>
                   
                   <Paper
                     variant="outlined"
                     sx={{
-                      p: 3,
+                      p: 2.5,
                       borderStyle: 'dashed',
                       borderWidth: 2,
                       borderColor: imagePreview ? 'primary.main' : 'grey.300',
@@ -250,7 +256,7 @@ export function StemQueryView() {
                       <>
                         <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
                         <Typography variant="body2" color="text.secondary">
-                          Kéo thả hoặc nhấp để tải lên
+                          Kéo thả hoặc nhấp để tải ảnh
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           Hỗ trợ: JPG, PNG, GIF
@@ -296,7 +302,8 @@ export function StemQueryView() {
                 disabled={loading}
                 sx={{ 
                   borderRadius: 2,
-                  py: 1
+                  py: 1,
+                  minWidth: 100
                 }}
               >
                 Xóa
@@ -316,7 +323,7 @@ export function StemQueryView() {
             elevation={3}
             sx={{ 
               height: '100%',
-              opacity: response ? 1 : 0.7,
+              opacity: hasResponse ? 1 : 0.88,
               display: 'flex',
               flexDirection: 'column'
             }}
@@ -328,7 +335,6 @@ export function StemQueryView() {
                   Kết quả Truy vấn
                 </Typography>
               }
-              subheader={response ? `Đã tìm thấy ${triplesCount} kết quả` : "Kết quả sẽ hiển thị ở đây"}
             />
             
             {loading && <LinearProgress sx={{ mx: 2 }} />}
@@ -355,53 +361,70 @@ export function StemQueryView() {
                 </Box>
               ) : (
                 <Stack spacing={3}>
-                  {/* Triples Section */}
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip size="small" variant="outlined" label={`Triples: ${triplesCount}`} />
+                    <Chip size="small" variant="outlined" label={`Mô tả: ${descriptionsCount}`} />
+                    <Chip size="small" variant="outlined" label={`Diagram: ${diagrams.length}`} />
+                  </Stack>
+
+                  {response?.pending_review && (
+                    <Alert severity="warning" sx={{ borderRadius: 1 }}>
+                      Nội dung chưa có trong kho tri thức hiện tại và đã được đưa vào vùng chờ admin duyệt bổ sung.
+                    </Alert>
+                  )}
+
+                  {finalOutput && (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>
+                        Kết quả đầu ra đề xuất
+                      </Typography>
+                      {finalOutput.description && (
+                        <Typography variant="body2" sx={{ mb: 1.5 }}>
+                          {finalOutput.description}
+                        </Typography>
+                      )}
+                      {!!finalOutput.video_recommendations?.length && (
+                        <Stack spacing={0.5}>
+                          {finalOutput.video_recommendations.map((video: any, idx: number) => (
+                            <Link
+                              key={`${video?.url}-${idx}`}
+                              href={video?.url || '#'}
+                              target="_blank"
+                              rel="noreferrer"
+                              underline="hover"
+                              variant="body2"
+                            >
+                              {video?.title || video?.url}
+                            </Link>
+                          ))}
+                        </Stack>
+                      )}
+                    </Paper>
+                  )}
+
                   {triplesCount > 0 && (
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <DescriptionIcon />
                         Bộ ba được trích xuất ({triplesCount})
                       </Typography>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexWrap: 'wrap', 
-                        gap: 1,
-                        alignItems: 'flex-start'
-                      }}>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
                         {response.triples.map((t: any, idx: number) => (
                           <Chip
                             key={`${t.subject}-${t.relationship}-${t.object}-${idx}`}
-                            label={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Typography variant="inherit" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                                  {t.subject}
-                                </Typography>
-                                <Typography variant="inherit" sx={{ color: 'text.secondary' }}>
-                                  {t.relationship}
-                                </Typography>
-                                <Typography variant="inherit" sx={{ fontWeight: 600, color: 'secondary.main' }}>
-                                  {t.object}
-                                </Typography>
-                              </Box>
-                            }
-                            sx={{ 
-                              px: 1,
-                              backgroundColor: 'background.default',
-                              border: '1px solid',
-                              borderColor: 'divider'
-                            }}
+                            label={`${t.subject} ${t.relationship} ${t.object}`}
+                            sx={{ mb: 1 }}
                           />
                         ))}
-                      </Box>
-                    </Box>
+                      </Stack>
+                    </Paper>
                   )}
 
                   {/* Query Results */}
                   {response?.query_results?.map((item: any, idx: number) => (
-                    <Box key={`${item.triple?.subject}-${idx}`}>
-                      <Divider sx={{ my: 2 }} />
+                    <Paper key={`${item.triple?.subject}-${idx}`} variant="outlined" sx={{ p: 2 }}>
                       
-                      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
                         <Box component="span" sx={{ color: 'primary.main' }}>{item.triple.subject}</Box>
                         {' '}
                         <Box component="span" sx={{ color: 'text.secondary' }}>{item.triple.relationship}</Box>
@@ -410,36 +433,25 @@ export function StemQueryView() {
                       </Typography>
 
                       {item?.results?.descriptions?.length > 0 && (
-                        <Paper variant="outlined" sx={{ p: 2, backgroundColor: 'grey.50' }}>
-                          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 600 }}>
                             Mô tả ({item.results.descriptions.length})
                           </Typography>
-                          <List dense disablePadding>
+                          <Stack spacing={1}>
                             {item.results.descriptions.map((desc: string, i: number) => (
-                              <ListItem 
-                                key={`${desc}-${i}`}
-                                sx={{ 
-                                  py: 0.5,
-                                  borderBottom: i < item.results.descriptions.length - 1 ? '1px dashed' : 'none',
-                                  borderColor: 'divider'
-                                }}
-                              >
-                                <ListItemText 
-                                  primary={desc} 
-                                  primaryTypographyProps={{ variant: 'body2' }}
-                                />
-                              </ListItem>
+                              <Typography key={`${desc}-${i}`} variant="body2" color="text.secondary">
+                                • {desc}
+                              </Typography>
                             ))}
-                          </List>
-                        </Paper>
+                          </Stack>
+                        </Box>
                       )}
-                    </Box>
+                    </Paper>
                   ))}
 
                   {/* Diagrams Section */}
                   {diagrams.length > 0 && (
-                    <Box>
-                      <Divider sx={{ my: 2 }} />
+                    <Paper variant="outlined" sx={{ p: 2 }}>
                       
                       <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ImageIcon />
@@ -452,9 +464,9 @@ export function StemQueryView() {
                         flexWrap: 'wrap',
                         gap: 2
                       }}>
-                        {diagrams.map((d: any) => (
+                        {diagrams.map((d: any, index: number) => (
                           <Box 
-                            key={d.diagram_id}
+                            key={`${d.diagram_id}-${index}`}
                             sx={{ 
                               flex: '1 1 auto',
                               minWidth: { xs: '100%', sm: 200 },
@@ -463,11 +475,13 @@ export function StemQueryView() {
                           >
                             <Paper 
                               elevation={0}
+                              onClick={() => setZoomedDiagram(d)}
                               sx={{ 
                                 p: 2, 
                                 border: '1px solid', 
                                 borderColor: 'divider',
                                 borderRadius: 2,
+                                cursor: 'zoom-in',
                                 transition: 'all 0.2s',
                                 '&:hover': {
                                   boxShadow: 2,
@@ -481,7 +495,7 @@ export function StemQueryView() {
                                 alt={d.diagram_id}
                                 sx={{
                                   width: '100%',
-                                  height: 150,
+                                  height: 160,
                                   objectFit: 'contain',
                                   borderRadius: 1,
                                   mb: 1,
@@ -503,7 +517,7 @@ export function StemQueryView() {
                           </Box>
                         ))}
                       </Box>
-                    </Box>
+                    </Paper>
                   )}
                 </Stack>
               )}
@@ -519,7 +533,7 @@ export function StemQueryView() {
                 mt: 'auto'
               }}>
                 <Typography variant="caption" color="text.secondary">
-                  {descriptionsCount} mô tả • {diagrams.length} hình ảnh
+                  {descriptionsCount} mô tả • {diagrams.length} hình ảnh • {response?.query?.phase || 'unknown phase'}
                 </Typography>
                 <Button 
                   size="small" 
@@ -533,6 +547,44 @@ export function StemQueryView() {
           </Card>
         </Box>
       </Box>
+
+      <Dialog
+        open={Boolean(zoomedDiagram)}
+        onClose={() => setZoomedDiagram(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogContent sx={{ p: 2, position: 'relative' }}>
+          <IconButton
+            size="small"
+            onClick={() => setZoomedDiagram(null)}
+            sx={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              backgroundColor: 'background.paper',
+              zIndex: 1,
+              '&:hover': { backgroundColor: 'grey.100' }
+            }}
+          >
+            ✕
+          </IconButton>
+          {zoomedDiagram && (
+            <Box
+              component="img"
+              src={toAbsoluteUrl(zoomedDiagram.image_path)}
+              alt={zoomedDiagram.diagram_id}
+              sx={{
+                width: '100%',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                borderRadius: 1,
+                backgroundColor: 'grey.100'
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

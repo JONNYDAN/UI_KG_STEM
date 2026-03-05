@@ -23,6 +23,7 @@ import {
   TextField,
   Alert,
   MenuItem,
+  TablePagination,
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
@@ -43,6 +44,86 @@ interface TabPanelProps {
   index: number;
   value: number;
 }
+
+type TabKey =
+  | 'rootCategories'
+  | 'categories'
+  | 'rootSubjects'
+  | 'subjects'
+  | 'relationships'
+  | 'diagrams';
+
+const TAB_KEY_BY_INDEX: Record<number, TabKey> = {
+  0: 'rootCategories',
+  1: 'categories',
+  2: 'rootSubjects',
+  3: 'subjects',
+  4: 'relationships',
+  5: 'diagrams',
+};
+
+const TAB_FILTER_CONFIG: Record<TabKey, { searchFields: string[]; filterOptions: Array<{ value: string; label: string }> }> = {
+  rootCategories: {
+    searchFields: ['id', 'code', 'name', 'description'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'code', label: 'Code' },
+      { value: 'name', label: 'Name' },
+      { value: 'description', label: 'Description' },
+    ],
+  },
+  categories: {
+    searchFields: ['id', 'code', 'name', 'root_category_id', 'level'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'code', label: 'Code' },
+      { value: 'name', label: 'Name' },
+      { value: 'root_category_id', label: 'Root Category ID' },
+      { value: 'level', label: 'Level' },
+    ],
+  },
+  rootSubjects: {
+    searchFields: ['id', 'code', 'name', 'description', 'parent_id', 'level'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'code', label: 'Code' },
+      { value: 'name', label: 'Name' },
+      { value: 'parent_id', label: 'Parent ID' },
+      { value: 'level', label: 'Level' },
+    ],
+  },
+  subjects: {
+    searchFields: ['id', 'code', 'name', 'root_subject_id', 'synonyms', 'categories', 'description'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'code', label: 'Code' },
+      { value: 'name', label: 'Name' },
+      { value: 'root_subject_id', label: 'Root Subject ID' },
+      { value: 'synonyms', label: 'Synonyms' },
+      { value: 'categories', label: 'Categories' },
+    ],
+  },
+  relationships: {
+    searchFields: ['id', 'code', 'name', 'description', 'semantic_type'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'code', label: 'Code' },
+      { value: 'name', label: 'Name' },
+      { value: 'semantic_type', label: 'Semantic Type' },
+    ],
+  },
+  diagrams: {
+    searchFields: ['id', 'root_category_id', 'category_name', 'category_id', 'trigger_code', 'image_path', 'processed'],
+    filterOptions: [
+      { value: 'id', label: 'ID' },
+      { value: 'root_category_id', label: 'Root Category' },
+      { value: 'category_name', label: 'Category Name' },
+      { value: 'category_id', label: 'Category ID' },
+      { value: 'trigger_code', label: 'Trigger Code' },
+      { value: 'processed', label: 'Processed' },
+    ],
+  },
+};
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
@@ -70,6 +151,47 @@ export default function EntityManagementView() {
   const [uploadDiagramId, setUploadDiagramId] = useState('');
   const [uploadProcessed, setUploadProcessed] = useState(true);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+
+  const [searchByTab, setSearchByTab] = useState<Record<TabKey, string>>({
+    rootCategories: '',
+    categories: '',
+    rootSubjects: '',
+    subjects: '',
+    relationships: '',
+    diagrams: '',
+  });
+  const [filterFieldByTab, setFilterFieldByTab] = useState<Record<TabKey, string>>({
+    rootCategories: 'name',
+    categories: 'name',
+    rootSubjects: 'name',
+    subjects: 'name',
+    relationships: 'name',
+    diagrams: 'id',
+  });
+  const [filterValueByTab, setFilterValueByTab] = useState<Record<TabKey, string>>({
+    rootCategories: '',
+    categories: '',
+    rootSubjects: '',
+    subjects: '',
+    relationships: '',
+    diagrams: '',
+  });
+  const [pageByTab, setPageByTab] = useState<Record<TabKey, number>>({
+    rootCategories: 0,
+    categories: 0,
+    rootSubjects: 0,
+    subjects: 0,
+    relationships: 0,
+    diagrams: 0,
+  });
+  const [rowsPerPageByTab, setRowsPerPageByTab] = useState<Record<TabKey, number>>({
+    rootCategories: 10,
+    categories: 10,
+    rootSubjects: 10,
+    subjects: 10,
+    relationships: 10,
+    diagrams: 10,
+  });
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -373,6 +495,120 @@ export default function EntityManagementView() {
     if (!uploadRootCategoryId) return [];
     return categories.filter((item) => item.root_category_id === uploadRootCategoryId);
   }, [categories, uploadRootCategoryId]);
+
+  const normalizeFieldValue = (item: any, field: string): string => {
+    const rawValue = item?.[field];
+    if (field === 'synonyms' || field === 'categories') {
+      return toStringArray(rawValue).join(', ');
+    }
+    if (typeof rawValue === 'boolean') {
+      return rawValue ? 'yes' : 'no';
+    }
+    if (rawValue === null || rawValue === undefined) {
+      return '';
+    }
+    return String(rawValue);
+  };
+
+  const applyFiltersAndSearch = (items: any[], tabKey: TabKey) => {
+    const searchValue = (searchByTab[tabKey] || '').trim().toLowerCase();
+    const filterField = filterFieldByTab[tabKey];
+    const filterValue = (filterValueByTab[tabKey] || '').trim().toLowerCase();
+    const searchableFields = TAB_FILTER_CONFIG[tabKey].searchFields;
+
+    return items.filter((item) => {
+      const searchHit =
+        !searchValue ||
+        searchableFields.some((field) => normalizeFieldValue(item, field).toLowerCase().includes(searchValue));
+
+      const filterHit =
+        !filterValue || normalizeFieldValue(item, filterField).toLowerCase().includes(filterValue);
+
+      return searchHit && filterHit;
+    });
+  };
+
+  const getSafePage = (tabKey: TabKey, totalItems: number) => {
+    const rowsPerPage = rowsPerPageByTab[tabKey];
+    const maxPage = Math.max(0, Math.ceil(totalItems / rowsPerPage) - 1);
+    return Math.min(pageByTab[tabKey], maxPage);
+  };
+
+  const paginate = <T,>(items: T[], tabKey: TabKey) => {
+    const safePage = getSafePage(tabKey, items.length);
+    const rowsPerPage = rowsPerPageByTab[tabKey];
+    const start = safePage * rowsPerPage;
+    return items.slice(start, start + rowsPerPage);
+  };
+
+  const filteredRootCategories = useMemo(() => applyFiltersAndSearch(rootCategories, 'rootCategories'), [rootCategories, searchByTab, filterFieldByTab, filterValueByTab]);
+  const filteredCategories = useMemo(() => applyFiltersAndSearch(categories, 'categories'), [categories, searchByTab, filterFieldByTab, filterValueByTab]);
+  const filteredRootSubjects = useMemo(() => applyFiltersAndSearch(rootSubjects, 'rootSubjects'), [rootSubjects, searchByTab, filterFieldByTab, filterValueByTab]);
+  const filteredSubjects = useMemo(() => applyFiltersAndSearch(subjects, 'subjects'), [subjects, searchByTab, filterFieldByTab, filterValueByTab]);
+  const filteredRelationships = useMemo(() => applyFiltersAndSearch(relationships, 'relationships'), [relationships, searchByTab, filterFieldByTab, filterValueByTab]);
+  const filteredDiagrams = useMemo(() => applyFiltersAndSearch(diagrams, 'diagrams'), [diagrams, searchByTab, filterFieldByTab, filterValueByTab]);
+
+  const pagedRootCategories = useMemo(() => paginate(filteredRootCategories, 'rootCategories'), [filteredRootCategories, pageByTab, rowsPerPageByTab]);
+  const pagedCategories = useMemo(() => paginate(filteredCategories, 'categories'), [filteredCategories, pageByTab, rowsPerPageByTab]);
+  const pagedRootSubjects = useMemo(() => paginate(filteredRootSubjects, 'rootSubjects'), [filteredRootSubjects, pageByTab, rowsPerPageByTab]);
+  const pagedSubjects = useMemo(() => paginate(filteredSubjects, 'subjects'), [filteredSubjects, pageByTab, rowsPerPageByTab]);
+  const pagedRelationships = useMemo(() => paginate(filteredRelationships, 'relationships'), [filteredRelationships, pageByTab, rowsPerPageByTab]);
+  const pagedDiagrams = useMemo(() => paginate(filteredDiagrams, 'diagrams'), [filteredDiagrams, pageByTab, rowsPerPageByTab]);
+
+  const renderTableControls = (tabKey: TabKey) => (
+    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 2fr auto' } }}>
+        <TextField
+          label="Search"
+          placeholder="Type to search..."
+          value={searchByTab[tabKey]}
+          onChange={(e) => {
+            const value = e.target.value;
+            setSearchByTab((prev) => ({ ...prev, [tabKey]: value }));
+            setPageByTab((prev) => ({ ...prev, [tabKey]: 0 }));
+          }}
+          fullWidth
+        />
+        <TextField
+          select
+          label="Filter field"
+          value={filterFieldByTab[tabKey]}
+          onChange={(e) => {
+            setFilterFieldByTab((prev) => ({ ...prev, [tabKey]: e.target.value }));
+            setPageByTab((prev) => ({ ...prev, [tabKey]: 0 }));
+          }}
+          fullWidth
+        >
+          {TAB_FILTER_CONFIG[tabKey].filterOptions.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          label="Filter value"
+          placeholder="Type value..."
+          value={filterValueByTab[tabKey]}
+          onChange={(e) => {
+            const value = e.target.value;
+            setFilterValueByTab((prev) => ({ ...prev, [tabKey]: value }));
+            setPageByTab((prev) => ({ ...prev, [tabKey]: 0 }));
+          }}
+          fullWidth
+        />
+        <Button
+          variant="outlined"
+          onClick={() => {
+            setSearchByTab((prev) => ({ ...prev, [tabKey]: '' }));
+            setFilterValueByTab((prev) => ({ ...prev, [tabKey]: '' }));
+            setPageByTab((prev) => ({ ...prev, [tabKey]: 0 }));
+          }}
+        >
+          Reset
+        </Button>
+      </Box>
+    </Paper>
+  );
 
   const handleUploadDiagram = async () => {
     if (!uploadRootCategoryId) {
@@ -839,6 +1075,7 @@ export default function EntityManagementView() {
 
       {/* Root Categories */}
       <TabPanel value={tabValue} index={0}>
+        {renderTableControls('rootCategories')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -859,7 +1096,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rootCategories.map((item) => (
+              {pagedRootCategories.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
@@ -878,10 +1115,24 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredRootCategories.length}
+          page={getSafePage('rootCategories', filteredRootCategories.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, rootCategories: newPage }))}
+          rowsPerPage={rowsPerPageByTab.rootCategories}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, rootCategories: value }));
+            setPageByTab((prev) => ({ ...prev, rootCategories: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Categories */}
       <TabPanel value={tabValue} index={1}>
+        {renderTableControls('categories')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -903,7 +1154,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {categories.map((item) => (
+              {pagedCategories.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
@@ -923,10 +1174,24 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredCategories.length}
+          page={getSafePage('categories', filteredCategories.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, categories: newPage }))}
+          rowsPerPage={rowsPerPageByTab.categories}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, categories: value }));
+            setPageByTab((prev) => ({ ...prev, categories: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Root Subjects */}
       <TabPanel value={tabValue} index={2}>
+        {renderTableControls('rootSubjects')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -949,7 +1214,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rootSubjects.map((item) => (
+              {pagedRootSubjects.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
@@ -970,10 +1235,24 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredRootSubjects.length}
+          page={getSafePage('rootSubjects', filteredRootSubjects.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, rootSubjects: newPage }))}
+          rowsPerPage={rowsPerPageByTab.rootSubjects}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, rootSubjects: value }));
+            setPageByTab((prev) => ({ ...prev, rootSubjects: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Subjects */}
       <TabPanel value={tabValue} index={3}>
+        {renderTableControls('subjects')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -997,7 +1276,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {subjects.map((item) => (
+              {pagedSubjects.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
@@ -1019,10 +1298,24 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredSubjects.length}
+          page={getSafePage('subjects', filteredSubjects.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, subjects: newPage }))}
+          rowsPerPage={rowsPerPageByTab.subjects}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, subjects: value }));
+            setPageByTab((prev) => ({ ...prev, subjects: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Relationships */}
       <TabPanel value={tabValue} index={4}>
+        {renderTableControls('relationships')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -1044,7 +1337,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {relationships.map((item) => (
+              {pagedRelationships.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
@@ -1064,6 +1357,19 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredRelationships.length}
+          page={getSafePage('relationships', filteredRelationships.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, relationships: newPage }))}
+          rowsPerPage={rowsPerPageByTab.relationships}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, relationships: value }));
+            setPageByTab((prev) => ({ ...prev, relationships: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Diagrams */}
@@ -1138,6 +1444,7 @@ export default function EntityManagementView() {
           </Box>
         </Paper>
 
+        {renderTableControls('diagrams')}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -1161,7 +1468,7 @@ export default function EntityManagementView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {diagrams.map((item) => (
+              {pagedDiagrams.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.root_category_id || '-'}</TableCell>
@@ -1183,6 +1490,19 @@ export default function EntityManagementView() {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component="div"
+          count={filteredDiagrams.length}
+          page={getSafePage('diagrams', filteredDiagrams.length)}
+          onPageChange={(_event, newPage) => setPageByTab((prev) => ({ ...prev, diagrams: newPage }))}
+          rowsPerPage={rowsPerPageByTab.diagrams}
+          onRowsPerPageChange={(event) => {
+            const value = parseInt(event.target.value, 10);
+            setRowsPerPageByTab((prev) => ({ ...prev, diagrams: value }));
+            setPageByTab((prev) => ({ ...prev, diagrams: 0 }));
+          }}
+          rowsPerPageOptions={[5, 10, 20, 50]}
+        />
       </TabPanel>
 
       {/* Edit/Create Dialog */}
