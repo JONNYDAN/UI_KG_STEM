@@ -36,6 +36,46 @@ const toAbsoluteUrl = (path?: string | null) => {
   return `${API_URL}${path}`;
 };
 
+const getYouTubeEmbedUrl = (url?: string) => {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host.includes('youtu.be')) {
+      const id = parsed.pathname.replace('/', '').trim();
+      return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+
+    if (host.includes('youtube.com')) {
+      const videoId = parsed.searchParams.get('v');
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/?#]+)/i);
+      if (shortsMatch?.[1]) {
+        return `https://www.youtube.com/embed/${shortsMatch[1]}`;
+      }
+
+      const embedMatch = parsed.pathname.match(/^\/embed\/([^/?#]+)/i);
+      if (embedMatch?.[1]) {
+        return `https://www.youtube.com/embed/${embedMatch[1]}`;
+      }
+
+      const searchQuery = parsed.searchParams.get('search_query');
+      if (searchQuery) {
+        return '';
+      }
+    }
+  } catch (error) {
+    return '';
+  }
+
+  return '';
+};
+
 export function StemQueryView() {
   const { user } = useAuth();
   
@@ -106,7 +146,12 @@ export function StemQueryView() {
 
   const triplesCount = response?.triples?.length || 0;
   const finalOutput = response?.final_output;
+  const scientificAnalysis = finalOutput?.scientific_analysis;
+  const videoRecommendations = finalOutput?.video_recommendations || [];
+  const primaryVideo = videoRecommendations[0] || null;
+  const secondaryVideos = videoRecommendations.slice(1);
   const hasResponse = Boolean(response);
+  const primaryEmbedUrl = getYouTubeEmbedUrl(primaryVideo?.url);
   const descriptionsCount = useMemo(() => {
     if (!response?.query_results) return 0;
     return response.query_results.reduce((total: number, item: any) => 
@@ -383,20 +428,163 @@ export function StemQueryView() {
                           {finalOutput.description}
                         </Typography>
                       )}
-                      {!!finalOutput.video_recommendations?.length && (
-                        <Stack spacing={0.5}>
-                          {finalOutput.video_recommendations.map((video: any, idx: number) => (
-                            <Link
-                              key={`${video?.url}-${idx}`}
-                              href={video?.url || '#'}
-                              target="_blank"
-                              rel="noreferrer"
-                              underline="hover"
-                              variant="body2"
-                            >
-                              {video?.title || video?.url}
-                            </Link>
-                          ))}
+                      {!!videoRecommendations.length && (
+                        <Stack spacing={0.8} sx={{ mt: 1.5 }}>
+                          <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            Video minh họa
+                          </Typography>
+
+                          {primaryVideo && (
+                            <Paper variant="outlined" sx={{ p: 1.5 }}>
+                              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                                {primaryVideo?.title || 'Video chính'}
+                              </Typography>
+
+                              {primaryEmbedUrl ? (
+                                <Box
+                                  component="iframe"
+                                  src={primaryEmbedUrl}
+                                  title="youtube-preview-primary"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                  allowFullScreen
+                                  sx={{
+                                    width: '100%',
+                                    height: { xs: 240, sm: 320 },
+                                    border: 0,
+                                    borderRadius: 1,
+                                    mb: 1,
+                                  }}
+                                />
+                              ) : (
+                                <Alert severity="info" sx={{ mb: 1 }}>
+                                  Video này không hỗ trợ nhúng trực tiếp. Vui lòng mở trên YouTube.
+                                </Alert>
+                              )}
+
+                              <Link
+                                href={primaryVideo?.url || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                underline="hover"
+                                variant="body2"
+                              >
+                                Mở video chính trên YouTube
+                              </Link>
+                            </Paper>
+                          )}
+
+                          {!!secondaryVideos.length && (
+                            <Paper variant="outlined" sx={{ p: 1.5 }}>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                                Video tham khảo thêm ({secondaryVideos.length})
+                              </Typography>
+                              <Stack spacing={0.7}>
+                                {secondaryVideos.map((video: any, idx: number) => (
+                                  <Link
+                                    key={`${video?.url}-${idx}`}
+                                    href={video?.url || '#'}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    underline="hover"
+                                    variant="body2"
+                                  >
+                                    {video?.title || `Video ${idx + 2}`}
+                                  </Link>
+                                ))}
+                              </Stack>
+                            </Paper>
+                          )}
+                        </Stack>
+                      )}
+
+                      {!!scientificAnalysis && (
+                        <Stack spacing={1.5} sx={{ mt: 2 }}>
+                          {scientificAnalysis.summary && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                Tóm tắt khoa học
+                              </Typography>
+                              <Typography variant="body2">{scientificAnalysis.summary}</Typography>
+                            </Box>
+                          )}
+
+                          {!!scientificAnalysis.key_points?.length && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                Ý chính
+                              </Typography>
+                              <Stack spacing={0.5}>
+                                {scientificAnalysis.key_points.map((point: string, idx: number) => (
+                                  <Typography key={`${point}-${idx}`} variant="body2" color="text.secondary">
+                                    • {point}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
+
+                          {!!scientificAnalysis.reasoning_steps?.length && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                Chuỗi phân tích
+                              </Typography>
+                              <Stack spacing={0.5}>
+                                {scientificAnalysis.reasoning_steps.map((step: string, idx: number) => (
+                                  <Typography key={`${step}-${idx}`} variant="body2" color="text.secondary">
+                                    {idx + 1}. {step}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
+
+                          {!!scientificAnalysis.applications?.length && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                Ứng dụng thực tế
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {scientificAnalysis.applications.map((app: string, idx: number) => (
+                                  <Chip key={`${app}-${idx}`} size="small" variant="outlined" label={app} />
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
+
+                          {!!scientificAnalysis.glossary?.length && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                Thuật ngữ
+                              </Typography>
+                              <Stack spacing={0.5}>
+                                {scientificAnalysis.glossary.map((g: any, idx: number) => (
+                                  <Typography key={`${g?.term}-${idx}`} variant="body2" color="text.secondary">
+                                    • <strong>{g?.term}</strong>: {g?.definition}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
+
+                          {!!scientificAnalysis.recommended_queries?.length && (
+                            <Box>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                Truy vấn gợi ý tiếp theo
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {scientificAnalysis.recommended_queries.map((q: string, idx: number) => (
+                                  <Chip
+                                    key={`${q}-${idx}`}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                    label={q}
+                                    onClick={() => setQueryText(q)}
+                                  />
+                                ))}
+                              </Stack>
+                            </Box>
+                          )}
                         </Stack>
                       )}
                     </Paper>
