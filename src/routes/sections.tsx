@@ -19,6 +19,7 @@ export const StemQueryPage = lazy(() => import('src/pages/stem-query'));
 export const StemAdminPage = lazy(() => import('src/pages/stem-admin'));
 export const EntityManagementPage = lazy(() => import('src/pages/entity-management'));
 export const SROManagementPage = lazy(() => import('src/pages/sro-management'));
+export const DiagramGraphPage = lazy(() => import('src/pages/diagram-graph'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 
 const renderFallback = () => (
@@ -68,6 +69,14 @@ export const routesSection: RouteObject[] = [
         element: (
           <ProtectedRoute>
             <StemQueryPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'stem/diagram-graph',
+        element: (
+          <ProtectedRoute>
+            <DiagramGraphPage />
           </ProtectedRoute>
         ),
       },

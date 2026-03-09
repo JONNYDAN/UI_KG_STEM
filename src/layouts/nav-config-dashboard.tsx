@@ -20,6 +20,11 @@ export const baseNavData: NavItem[] = [
     path: '/stem/query',
     icon: icon('majesticons--search'),
   },
+  {
+    title: 'Sơ đồ tri thức',
+    path: '/stem/diagram-graph',
+    icon: icon('gravity-ui--nodes-right'),
+  },
 ];
 
 // Create admin-specific nav items
