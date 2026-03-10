@@ -21,9 +21,9 @@ export const baseNavData: NavItem[] = [
     icon: icon('majesticons--search'),
   },
   {
-    title: 'Sơ đồ tri thức',
+    title: 'Đồ thị tri thức',
     path: '/stem/diagram-graph',
-    icon: icon('gravity-ui--nodes-right'),
+    icon: icon('grommet-icons--nodes'),
   },
 ];
 

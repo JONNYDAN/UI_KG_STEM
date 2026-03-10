@@ -15,6 +15,16 @@ export type StemQueryResponse = {
     diagram?: { diagram_id?: string; image_path?: string; category_id?: number } | null;
     description?: string;
     video_recommendations?: Array<{ title?: string; url?: string }>;
+    diagram_explanation?: {
+      title?: string;
+      overview?: string;
+      process_steps?: string[];
+      key_takeaways?: string[];
+      applications?: string[];
+      glossary?: Array<{ term?: string; definition?: string }>;
+      learning_prompt?: string;
+      source_query?: string | null;
+    };
     scientific_analysis?: {
       summary?: string;
       key_points?: string[];

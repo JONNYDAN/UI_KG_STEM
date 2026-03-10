@@ -118,7 +118,12 @@ export function StemQueryView() {
       });
       setResponse(result);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Không thể xử lý truy vấn');
+      const rawMessage = String(err?.message || '');
+      if (rawMessage.toLowerCase().includes('timeout')) {
+        setError('Yêu cầu xử lý đang quá thời gian chờ. Vui lòng thử lại hoặc tăng VITE_API_TIMEOUT_MS.');
+      } else {
+        setError(err?.response?.data?.detail || err?.message || 'Không thể xử lý truy vấn');
+      }
     } finally {
       setLoading(false);
     }
@@ -146,6 +151,8 @@ export function StemQueryView() {
 
   const triplesCount = response?.triples?.length || 0;
   const finalOutput = response?.final_output;
+  const diagramExplanation = finalOutput?.diagram_explanation;
+  const primaryDiagramId = finalOutput?.diagram?.diagram_id;
   const scientificAnalysis = finalOutput?.scientific_analysis;
   const videoRecommendations = finalOutput?.video_recommendations || [];
   const primaryVideo = videoRecommendations[0] || null;
@@ -418,6 +425,168 @@ export function StemQueryView() {
                     </Alert>
                   )}
 
+                  {/* Diagrams Section */}
+                  {diagrams.length > 0 && (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      
+                      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ImageIcon />
+                        Hình ảnh Diagram ({diagrams.length})
+                      </Typography>
+                      
+                      <Box sx={{ 
+                        display: 'flex',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        flexWrap: 'wrap',
+                        gap: 2
+                      }}>
+                        {diagrams.map((d: any, index: number) => {
+                          const shouldShowDetailedExplanation = Boolean(
+                            diagramExplanation && (
+                              diagrams.length === 1 ||
+                              (primaryDiagramId && d.diagram_id === primaryDiagramId)
+                            )
+                          );
+
+                          return (
+                          <Box 
+                            key={`${d.diagram_id}-${index}`}
+                            sx={{ 
+                              flex: '1 1 auto',
+                              minWidth: { xs: '100%', sm: 200 },
+                              maxWidth: { xs: '100%', sm: 460 }
+                            }}
+                          >
+                            <Paper 
+                              elevation={0}
+                              onClick={() => setZoomedDiagram(d)}
+                              sx={{ 
+                                p: 2, 
+                                border: '1px solid', 
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                cursor: 'zoom-in',
+                                transition: 'all 0.2s',
+                                '&:hover': {
+                                  boxShadow: 2,
+                                  borderColor: 'primary.light'
+                                }
+                              }}
+                            >
+                              <Box
+                                component="img"
+                                src={toAbsoluteUrl(d.image_path)}
+                                alt={d.diagram_id}
+                                sx={{
+                                  width: '100%',
+                                  height: 160,
+                                  objectFit: 'contain',
+                                  borderRadius: 1,
+                                  mb: 1,
+                                  backgroundColor: 'grey.100'
+                                }}
+                              />
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  display: 'block',
+                                  textAlign: 'center',
+                                  color: 'text.secondary',
+                                  fontFamily: 'monospace'
+                                }}
+                              >
+                                {d.diagram_id}
+                              </Typography>
+                            </Paper>
+
+                            {shouldShowDetailedExplanation && (
+                              <Paper variant="outlined" sx={{ p: 1.5, mt: 1.25 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                                  {diagramExplanation?.title || 'Giải thích chi tiết'}
+                                </Typography>
+
+                                {diagramExplanation?.overview && (
+                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    {diagramExplanation.overview}
+                                  </Typography>
+                                )}
+
+                                {!!diagramExplanation?.process_steps?.length && (
+                                  <Box sx={{ mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                      Quy trình
+                                    </Typography>
+                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                                      {diagramExplanation.process_steps.map((step: string, stepIdx: number) => (
+                                        <Typography key={`${step}-${stepIdx}`} variant="caption" color="text.secondary">
+                                          {stepIdx + 1}. {step}
+                                        </Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
+
+                                {!!diagramExplanation?.key_takeaways?.length && (
+                                  <Box sx={{ mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                      Điểm cốt lõi
+                                    </Typography>
+                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                                      {diagramExplanation.key_takeaways.map((point: string, pointIdx: number) => (
+                                        <Typography key={`${point}-${pointIdx}`} variant="caption" color="text.secondary">
+                                          • {point}
+                                        </Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
+
+                                {!!diagramExplanation?.applications?.length && (
+                                  <Box sx={{ mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                      Ứng dụng
+                                    </Typography>
+                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                                      {diagramExplanation.applications.map((application: string, appIdx: number) => (
+                                        <Typography key={`${application}-${appIdx}`} variant="caption" color="text.secondary">
+                                          • {application}
+                                        </Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
+
+                                {!!diagramExplanation?.glossary?.length && (
+                                  <Box sx={{ mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                      Thuật ngữ
+                                    </Typography>
+                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                                      {diagramExplanation.glossary.map((g: any, gIdx: number) => (
+                                        <Typography key={`${g?.term}-${gIdx}`} variant="caption" color="text.secondary">
+                                          • <strong>{g?.term}</strong>: {g?.definition}
+                                        </Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
+
+                                {diagramExplanation?.learning_prompt && (
+                                  <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
+                                    <Typography variant="caption">
+                                      {diagramExplanation.learning_prompt}
+                                    </Typography>
+                                  </Alert>
+                                )}
+                              </Paper>
+                            )}
+                          </Box>
+                          );
+                        })}
+                      </Box>
+                    </Paper>
+                  )}
+
                   {finalOutput && (
                     <Paper variant="outlined" sx={{ p: 2 }}>
                       <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>
@@ -428,6 +597,7 @@ export function StemQueryView() {
                           {finalOutput.description}
                         </Typography>
                       )}
+
                       {!!videoRecommendations.length && (
                         <Stack spacing={0.8} sx={{ mt: 1.5 }}>
                           <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -637,76 +807,7 @@ export function StemQueryView() {
                     </Paper>
                   ))}
 
-                  {/* Diagrams Section */}
-                  {diagrams.length > 0 && (
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                      
-                      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ImageIcon />
-                        Hình ảnh Diagram liên quan ({diagrams.length})
-                      </Typography>
-                      
-                      <Box sx={{ 
-                        display: 'flex',
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        flexWrap: 'wrap',
-                        gap: 2
-                      }}>
-                        {diagrams.map((d: any, index: number) => (
-                          <Box 
-                            key={`${d.diagram_id}-${index}`}
-                            sx={{ 
-                              flex: '1 1 auto',
-                              minWidth: { xs: '100%', sm: 200 },
-                              maxWidth: { xs: '100%', sm: 240 }
-                            }}
-                          >
-                            <Paper 
-                              elevation={0}
-                              onClick={() => setZoomedDiagram(d)}
-                              sx={{ 
-                                p: 2, 
-                                border: '1px solid', 
-                                borderColor: 'divider',
-                                borderRadius: 2,
-                                cursor: 'zoom-in',
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                  boxShadow: 2,
-                                  borderColor: 'primary.light'
-                                }
-                              }}
-                            >
-                              <Box
-                                component="img"
-                                src={toAbsoluteUrl(d.image_path)}
-                                alt={d.diagram_id}
-                                sx={{
-                                  width: '100%',
-                                  height: 160,
-                                  objectFit: 'contain',
-                                  borderRadius: 1,
-                                  mb: 1,
-                                  backgroundColor: 'grey.100'
-                                }}
-                              />
-                              <Typography 
-                                variant="caption" 
-                                sx={{ 
-                                  display: 'block',
-                                  textAlign: 'center',
-                                  color: 'text.secondary',
-                                  fontFamily: 'monospace'
-                                }}
-                              >
-                                {d.diagram_id}
-                              </Typography>
-                            </Paper>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Paper>
-                  )}
+                  
                 </Stack>
               )}
             </CardContent>
