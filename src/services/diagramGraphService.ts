@@ -20,7 +20,11 @@ export type Category = {
 export type Diagram = {
   id: string;
   category_id: number;
+  category_name?: string;
+  root_category_id?: string;
   image_path?: string | null;
+  description?: string;
+  path_pdf?: string;
   processed?: boolean;
   created_at?: string;
 };

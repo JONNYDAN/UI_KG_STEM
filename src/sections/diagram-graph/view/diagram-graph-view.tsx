@@ -1,5 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 
+import ImageIcon from '@mui/icons-material/Image';
+import DescriptionIcon from '@mui/icons-material/Description';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import {
   Alert,
   Box,
@@ -41,6 +44,13 @@ const toAbsoluteUrl = (path?: string | null) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${API_URL}${path}`;
+};
+
+const stripHtml = (value: string): string => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const truncateText = (value: string | undefined | null, maxLength = 90): string => {
+  const normalized = stripHtml(value || '');
+  if (!normalized) return 'Chưa có mô tả';
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 };
 
 const nodeColorByTypeLight: Record<string, string> = {
@@ -147,33 +157,18 @@ export function DiagramGraphView() {
   const [dragLastPoint, setDragLastPoint] = useState<Point | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panLastScreenPoint, setPanLastScreenPoint] = useState<Point | null>(null);
-  const [graphTheme, setGraphTheme] = useState<'light' | 'dark'>(() => {
-    const stored = localStorage.getItem('diagram-graph-theme');
-    return stored === 'dark' ? 'dark' : 'light';
-  });
+  const [diagramImageOpen, setDiagramImageOpen] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const nodeColorByType = nodeColorByTypeLight;
+  const edgeColor = '#94A3B8';
+  const edgeLabelColor = '#475569';
+  const canvasBackground = '#F8FAFC';
+  const canvasBorder = '#CBD5E1';
 
-  const isDarkTheme = graphTheme === 'dark';
-  const nodeColorByType = isDarkTheme ? nodeColorByTypeDark : nodeColorByTypeLight;
-  const edgeColor = isDarkTheme ? '#64748B' : '#94A3B8';
-  const edgeLabelColor = isDarkTheme ? '#CBD5E1' : '#475569';
-  const canvasBackground = isDarkTheme ? '#0F172A' : '#F8FAFC';
-  const canvasBorder = isDarkTheme ? '#334155' : '#CBD5E1';
-
-  const modalHintChipSx = isDarkTheme
-    ? {
-        color: '#FFFFFF',
-        borderColor: '#64748B',
-        backgroundColor: '#1E293B',
-      }
-    : undefined;
-
-  const toggleGraphTheme = () => {
-    setGraphTheme((prev) => {
-      const next = prev === 'light' ? 'dark' : 'light';
-      localStorage.setItem('diagram-graph-theme', next);
-      return next;
-    });
-  };
+  const selectedDiagramImageUrl = toAbsoluteUrl(selectedDiagram?.image_path);
+  const hasDescription = Boolean(stripHtml(selectedDiagram?.description || ''));
+  const hasPdf = Boolean(selectedDiagram?.path_pdf);
 
   useEffect(() => {
     const fetchRoots = async () => {
@@ -284,6 +279,25 @@ export function DiagramGraphView() {
     setPositions(initialPositions);
   }, [positionedNodes]);
 
+  useEffect(() => {
+    const handleBrowserZoomConflict = (event: WheelEvent) => {
+      if (!graphModalOpen) return;
+      if (!event.ctrlKey) return;
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (!graphCanvasRef.current?.contains(target)) return;
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('wheel', handleBrowserZoomConflict, { passive: false, capture: true });
+    return () => {
+      document.removeEventListener('wheel', handleBrowserZoomConflict, true);
+    };
+  }, [graphModalOpen]);
+
   const positionedNodeMap = useMemo(() => {
     const map = new Map<string, Point>();
     Object.entries(positions).forEach(([nodeId, point]) => map.set(nodeId, point));
@@ -296,10 +310,23 @@ export function DiagramGraphView() {
     setDragLastPoint(null);
     setIsPanning(false);
     setPanLastScreenPoint(null);
+    setDiagramImageOpen(false);
+    setDescriptionOpen(false);
+  };
+
+  const handleOpenPdf = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (!selectedDiagram?.path_pdf) return;
+    window.open(selectedDiagram.path_pdf, '_blank', 'noopener,noreferrer');
   };
 
   const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
+    if (!event.ctrlKey) {
+      return;
+    }
+
     event.preventDefault();
+    event.stopPropagation();
 
     const zoomFactor = event.deltaY < 0 ? 1.12 : 0.9;
     const newZoom = clamp(zoom * zoomFactor, 0.35, 2.8);
@@ -312,6 +339,12 @@ export function DiagramGraphView() {
 
     setZoom(newZoom);
     setPan(newPan);
+  };
+
+  const handleWheelCapture = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   const handleSvgMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
@@ -472,6 +505,8 @@ export function DiagramGraphView() {
                   onClick={() => handleOpenGraph(diagram)}
                   sx={{
                     cursor: 'pointer',
+                    bgcolor: 'background.paper',
+                    color: 'text.primary',
                     borderColor: isSelected ? 'primary.main' : 'divider',
                     transition: 'all 0.2s ease',
                     '&:hover': { borderColor: 'primary.main' },
@@ -484,12 +519,37 @@ export function DiagramGraphView() {
                     alt={diagram.id}
                   />
                   <CardContent>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
                       Diagram: {diagram.id}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Category ID: {diagram.category_id}
                     </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                      {truncateText(diagram.description, 100)}
+                    </Typography>
+                    {diagram.path_pdf && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<PictureAsPdfIcon fontSize="small" />}
+                        sx={{
+                          mt: 1,
+                          color: 'error.main',
+                          borderColor: 'error.light',
+                          '&:hover': {
+                            borderColor: 'error.main',
+                            bgcolor: 'rgba(220, 38, 38, 0.08)',
+                          },
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          window.open(diagram.path_pdf, '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        tài liệu tham khảo
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
@@ -499,26 +559,81 @@ export function DiagramGraphView() {
       </Card>
 
       <Dialog open={graphModalOpen} onClose={handleCloseModal} fullWidth maxWidth="xl">
-        <DialogTitle sx={{ pb: 1, bgcolor: isDarkTheme ? '#111827' : 'background.paper', color: isDarkTheme ? '#E5E7EB' : 'text.primary' }}>
+        <DialogTitle sx={{ pb: 1, bgcolor: 'background.paper', color: 'text.primary' }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
             <Typography variant="h6">Đồ thị tri thức: {selectedDiagram?.id || '-'}</Typography>
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" size="small" onClick={toggleGraphTheme}>Theme {isDarkTheme ? 'Sáng' : 'Tối'}</Button>
               <Button variant="outlined" size="small" onClick={handleZoomOut}>Zoom -</Button>
               <Button variant="outlined" size="small" onClick={handleZoomIn}>Zoom +</Button>
               <Button variant="outlined" size="small" onClick={handleResetView}>Reset</Button>
-              <IconButton onClick={handleCloseModal} size="small" sx={{ color: isDarkTheme ? '#E5E7EB' : 'inherit' }}>✕</IconButton>
+              <IconButton onClick={handleCloseModal} size="small">✕</IconButton>
             </Stack>
           </Stack>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-            <Chip size="small" label={`Zoom: ${zoom.toFixed(2)}x`} variant="outlined" sx={modalHintChipSx} />
-            <Chip size="small" label="Kéo node để di chuyển" variant="outlined" sx={modalHintChipSx} />
-            <Chip size="small" label="Kéo nền để pan" variant="outlined" sx={modalHintChipSx} />
-            <Chip size="small" label="Lăn chuột để zoom" variant="outlined" sx={modalHintChipSx} />
+            <Chip size="small" label={`Zoom: ${zoom.toFixed(2)}x`} variant="outlined" />
+            <Chip size="small" label="Kéo node để di chuyển" variant="outlined" />
+            <Chip size="small" label="Kéo nền để pan" variant="outlined" />
+            <Chip size="small" label="Giữ Ctrl + lăn chuột để zoom" variant="outlined" />
           </Stack>
         </DialogTitle>
 
-        <DialogContent sx={{ pt: 1, bgcolor: isDarkTheme ? '#111827' : 'background.paper' }}>
+        <DialogContent sx={{ pt: 1, bgcolor: 'background.paper' }}>
+          {selectedDiagram && (
+            <Card variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+              <CardContent>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ xs: 'stretch', sm: 'center' }}
+                  justifyContent="space-between"
+                >
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      Diagram {selectedDiagram.id}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Category ID: {selectedDiagram.category_id}
+                    </Typography>
+                  </Box>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<ImageIcon fontSize="small" />}
+                      onClick={() => setDiagramImageOpen(true)}
+                      disabled={!selectedDiagramImageUrl}
+                    >
+                      xem hình diagram
+                    </Button>
+
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DescriptionIcon fontSize="small" />}
+                      onClick={() => setDescriptionOpen(true)}
+                      disabled={!hasDescription}
+                    >
+                      xem description
+                    </Button>
+
+                    {hasPdf && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        startIcon={<PictureAsPdfIcon fontSize="small" />}
+                        onClick={handleOpenPdf}
+                      >
+                        tài liệu tham khảo
+                      </Button>
+                    )}
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
           {loadingGraph && (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
               <CircularProgress size={20} />
@@ -531,7 +646,11 @@ export function DiagramGraphView() {
           )}
 
           {graphData && (
-            <Box sx={{ width: '100%', overflow: 'hidden', border: '1px solid', borderColor: canvasBorder, borderRadius: 1.5, height: 760 }}>
+            <Box
+              ref={graphCanvasRef}
+              onWheelCapture={handleWheelCapture}
+              sx={{ width: '100%', overflow: 'hidden', border: '1px solid', borderColor: canvasBorder, borderRadius: 1.5, height: 760 }}
+            >
               <svg
                 width="100%"
                 height="100%"
@@ -609,6 +728,69 @@ export function DiagramGraphView() {
                 </g>
               </svg>
             </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={diagramImageOpen} onClose={() => setDiagramImageOpen(false)} fullWidth maxWidth="lg">
+        <DialogTitle sx={{ pb: 1, bgcolor: 'background.paper', color: 'text.primary' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">Xem hình diagram: {selectedDiagram?.id || '-'}</Typography>
+            <IconButton onClick={() => setDiagramImageOpen(false)} size="small">
+              ✕
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, bgcolor: 'background.paper' }}>
+          {selectedDiagramImageUrl ? (
+            <Box
+              component="img"
+              src={selectedDiagramImageUrl}
+              alt={selectedDiagram?.id || 'diagram'}
+              sx={{
+                width: '100%',
+                maxHeight: '72vh',
+                objectFit: 'contain',
+                display: 'block',
+                mx: 'auto',
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            />
+          ) : (
+            <Box sx={{ p: 3 }}>
+              <Alert severity="info">Diagram này chưa có image_path để phóng to.</Alert>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={descriptionOpen} onClose={() => setDescriptionOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle sx={{ pb: 1, bgcolor: 'background.paper', color: 'text.primary' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">Description: {selectedDiagram?.id || '-'}</Typography>
+            <IconButton onClick={() => setDescriptionOpen(false)} size="small">
+              ✕
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, bgcolor: 'background.paper' }}>
+          {hasDescription ? (
+            <Box
+              sx={{
+                p: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                maxHeight: '64vh',
+                overflow: 'auto',
+                '& p': { mt: 0, mb: 1.25, lineHeight: 1.6 },
+              }}
+              dangerouslySetInnerHTML={{ __html: selectedDiagram?.description || '' }}
+            />
+          ) : (
+            <Alert severity="info">Diagram này chưa có description.</Alert>
           )}
         </DialogContent>
       </Dialog>

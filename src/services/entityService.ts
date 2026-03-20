@@ -62,6 +62,8 @@ export interface Diagram {
   file_size?: number;
   trigger_code?: string;
   image_path?: string;
+  description?: string;
+  path_pdf?: string;
   processed?: boolean;
   diagram_metadata?: any;
   created_at?: string;

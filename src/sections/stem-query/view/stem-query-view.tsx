@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { useMemo, useState } from 'react';
 
 import Box from '@mui/material/Box';
@@ -24,6 +25,7 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DescriptionIcon from '@mui/icons-material/Description';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
 import { useAuth } from 'src/contexts/AuthContext';
 import { submitStemQuery } from 'src/services/stemQueryService';
@@ -35,6 +37,13 @@ const toAbsoluteUrl = (path?: string | null) => {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${API_URL}${path}`;
 };
+
+const getDiagramPdfPath = (diagram?: any) =>
+  diagram?.path_pdf || diagram?.pdf_path || diagram?.pdfUrl || '';
+
+const renderSafeHtml = (value?: string) => ({
+  __html: DOMPurify.sanitize(value || ''),
+});
 
 const getYouTubeEmbedUrl = (url?: string) => {
   if (!url) return '';
@@ -78,7 +87,7 @@ const getYouTubeEmbedUrl = (url?: string) => {
 
 export function StemQueryView() {
   const { user } = useAuth();
-  
+
   const [queryText, setQueryText] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
@@ -107,7 +116,7 @@ export function StemQueryView() {
       setError('Vui lòng nhập truy vấn hoặc chọn ảnh');
       return;
     }
-    
+
     setLoading(true);
     setError('');
     try {
@@ -120,7 +129,9 @@ export function StemQueryView() {
     } catch (err: any) {
       const rawMessage = String(err?.message || '');
       if (rawMessage.toLowerCase().includes('timeout')) {
-        setError('Yêu cầu xử lý đang quá thời gian chờ. Vui lòng thử lại hoặc tăng VITE_API_TIMEOUT_MS.');
+        setError(
+          'Yêu cầu xử lý đang quá thời gian chờ. Vui lòng thử lại hoặc tăng VITE_API_TIMEOUT_MS.'
+        );
       } else {
         setError(err?.response?.data?.detail || err?.message || 'Không thể xử lý truy vấn');
       }
@@ -144,8 +155,18 @@ export function StemQueryView() {
     response.query_results.forEach((item: any) => {
       (item?.results?.diagrams || []).forEach((d: any) => list.push(d));
     });
-    const unique = new Map();
-    list.forEach((d) => unique.set(d.diagram_id, d));
+    const unique = new Map<string, any>();
+    list.forEach((d) => {
+      const key = d?.diagram_id;
+      if (!key) return;
+      const existing = unique.get(key) || {};
+      unique.set(key, {
+        ...existing,
+        ...d,
+        description: existing.description || d.description,
+        path_pdf: existing.path_pdf || d.path_pdf || d.pdf_path || d.pdfUrl,
+      });
+    });
     return Array.from(unique.values());
   }, [response]);
 
@@ -161,19 +182,23 @@ export function StemQueryView() {
   const primaryEmbedUrl = getYouTubeEmbedUrl(primaryVideo?.url);
   const descriptionsCount = useMemo(() => {
     if (!response?.query_results) return 0;
-    return response.query_results.reduce((total: number, item: any) => 
-      total + (item?.results?.descriptions?.length || 0), 0);
+    return response.query_results.reduce(
+      (total: number, item: any) => total + (item?.results?.descriptions?.length || 0),
+      0
+    );
   }, [response]);
 
   return (
-    <Box sx={{ 
-      maxWidth: 1200, 
-      mx: 'auto', 
-      p: { xs: 2, sm: 3 },
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 3
-    }}>
+    <Box
+      sx={{
+        maxWidth: 1200,
+        mx: 'auto',
+        p: { xs: 2, sm: 3 },
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+      }}
+    >
       <Card variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
         <Stack spacing={1}>
           <Typography
@@ -184,7 +209,8 @@ export function StemQueryView() {
             Truy vấn Ảnh STEM
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Nhập câu hỏi văn bản, tải ảnh (hoặc cả hai) để hệ thống phân tích và đề xuất diagram phù hợp.
+            Nhập câu hỏi văn bản, tải ảnh (hoặc cả hai) để hệ thống phân tích và đề xuất diagram phù
+            hợp.
           </Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip size="small" label={`Phase: ${response?.query?.phase || 'idle'}`} />
@@ -194,25 +220,29 @@ export function StemQueryView() {
         </Stack>
       </Card>
 
-      <Box sx={{ 
-        display: 'flex',
-        flexDirection: { xs: 'column', md: 'row' },
-        gap: 3,
-        width: '100%'
-      }}>
-        {/* Input Section */}
-        <Box sx={{ 
-          flex: 1,
+      <Box
+        sx={{
           display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0 // Prevents overflow
-        }}>
-          <Card 
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: 3,
+          width: '100%',
+        }}
+      >
+        {/* Input Section */}
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0, // Prevents overflow
+          }}
+        >
+          <Card
             elevation={3}
-            sx={{ 
+            sx={{
               height: '100%',
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
             }}
           >
             <CardHeader
@@ -224,7 +254,7 @@ export function StemQueryView() {
               }
               subheader="Nhập truy vấn dạng văn bản và/hoặc tải lên hình ảnh STEM"
             />
-            
+
             <CardContent sx={{ flexGrow: 1 }}>
               <Stack spacing={3}>
                 <TextField
@@ -240,13 +270,16 @@ export function StemQueryView() {
                     startAdornment: <DescriptionIcon sx={{ mr: 1, color: 'action.active' }} />,
                   }}
                 />
-                
+
                 <Box>
-                  <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
                     <ImageIcon />
                     Hình ảnh minh họa
                   </Typography>
-                  
+
                   <Paper
                     variant="outlined"
                     sx={{
@@ -260,8 +293,8 @@ export function StemQueryView() {
                       transition: 'all 0.2s',
                       '&:hover': {
                         borderColor: 'primary.main',
-                        backgroundColor: 'action.hover'
-                      }
+                        backgroundColor: 'action.hover',
+                      },
                     }}
                     onClick={() => document.getElementById('file-input')?.click()}
                   >
@@ -273,7 +306,7 @@ export function StemQueryView() {
                       style={{ display: 'none' }}
                       disabled={loading}
                     />
-                    
+
                     {imagePreview ? (
                       <Box sx={{ position: 'relative' }}>
                         <Box
@@ -284,7 +317,7 @@ export function StemQueryView() {
                             maxWidth: '100%',
                             maxHeight: 200,
                             borderRadius: 1,
-                            mb: 1
+                            mb: 1,
                           }}
                         />
                         <IconButton
@@ -293,7 +326,7 @@ export function StemQueryView() {
                             position: 'absolute',
                             top: 8,
                             right: 8,
-                            backgroundColor: 'background.paper'
+                            backgroundColor: 'background.paper',
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -317,13 +350,13 @@ export function StemQueryView() {
                     )}
                   </Paper>
                 </Box>
-                
+
                 {error && (
-                  <Alert 
-                    severity="error" 
-                    sx={{ 
+                  <Alert
+                    severity="error"
+                    sx={{
                       borderRadius: 1,
-                      '& .MuiAlert-message': { width: '100%' }
+                      '& .MuiAlert-message': { width: '100%' },
                     }}
                   >
                     {error}
@@ -331,31 +364,33 @@ export function StemQueryView() {
                 )}
               </Stack>
             </CardContent>
-            
+
             <CardActions sx={{ p: 2, pt: 0, gap: 2 }}>
               <Button
                 variant="contained"
                 onClick={handleSubmit}
                 disabled={loading || (!queryText.trim() && !imageFile)}
-                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
-                sx={{ 
+                startIcon={
+                  loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />
+                }
+                sx={{
                   minWidth: 140,
                   flex: 1,
                   borderRadius: 2,
-                  py: 1
+                  py: 1,
                 }}
               >
                 {loading ? 'Đang xử lý...' : 'Kích hoạt truy vấn'}
               </Button>
-              
+
               <Button
                 variant="outlined"
                 onClick={handleClear}
                 disabled={loading}
-                sx={{ 
+                sx={{
                   borderRadius: 2,
                   py: 1,
-                  minWidth: 100
+                  minWidth: 100,
                 }}
               >
                 Xóa
@@ -365,19 +400,21 @@ export function StemQueryView() {
         </Box>
 
         {/* Results Section */}
-        <Box sx={{ 
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0 // Prevents overflow
-        }}>
-          <Card 
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0, // Prevents overflow
+          }}
+        >
+          <Card
             elevation={3}
-            sx={{ 
+            sx={{
               height: '100%',
               opacity: hasResponse ? 1 : 0.88,
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
             }}
           >
             <CardHeader
@@ -388,24 +425,28 @@ export function StemQueryView() {
                 </Typography>
               }
             />
-            
+
             {loading && <LinearProgress sx={{ mx: 2 }} />}
-            
-            <CardContent sx={{ 
-              flexGrow: 1,
-              overflow: 'auto',
-              maxHeight: { xs: 500, md: 600 }
-            }}>
+
+            <CardContent
+              sx={{
+                flexGrow: 1,
+                overflow: 'auto',
+                maxHeight: { xs: 500, md: 600 },
+              }}
+            >
               {!response ? (
-                <Box sx={{ 
-                  height: '100%', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  py: 8, 
-                  color: 'text.secondary' 
-                }}>
+                <Box
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    py: 8,
+                    color: 'text.secondary',
+                  }}
+                >
                   <PsychologyIcon sx={{ fontSize: 64, mb: 2, opacity: 0.5 }} />
                   <Typography variant="body1" align="center">
                     Nhập truy vấn và nhấn Kích hoạt truy vấn để xem kết quả
@@ -421,166 +462,202 @@ export function StemQueryView() {
 
                   {response?.pending_review && (
                     <Alert severity="warning" sx={{ borderRadius: 1 }}>
-                      Nội dung chưa có trong kho tri thức hiện tại và đã được đưa vào vùng chờ admin duyệt bổ sung.
+                      Nội dung chưa có trong kho tri thức hiện tại và đã được đưa vào vùng chờ admin
+                      duyệt bổ sung.
                     </Alert>
                   )}
 
                   {/* Diagrams Section */}
                   {diagrams.length > 0 && (
                     <Paper variant="outlined" sx={{ p: 2 }}>
-                      
-                      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          mb: 2,
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
                         <ImageIcon />
                         Hình ảnh Diagram ({diagrams.length})
                       </Typography>
-                      
-                      <Box sx={{ 
-                        display: 'flex',
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        flexWrap: 'wrap',
-                        gap: 2
-                      }}>
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          flexWrap: 'wrap',
+                          gap: 2,
+                        }}
+                      >
                         {diagrams.map((d: any, index: number) => {
                           const shouldShowDetailedExplanation = Boolean(
-                            diagramExplanation && (
-                              diagrams.length === 1 ||
-                              (primaryDiagramId && d.diagram_id === primaryDiagramId)
-                            )
+                            diagramExplanation &&
+                              (diagrams.length === 1 ||
+                                (primaryDiagramId && d.diagram_id === primaryDiagramId))
                           );
+                          const diagramPdfUrl = toAbsoluteUrl(getDiagramPdfPath(d));
 
                           return (
-                          <Box 
-                            key={`${d.diagram_id}-${index}`}
-                            sx={{ 
-                              flex: '1 1 auto',
-                              minWidth: { xs: '100%', sm: 200 },
-                              maxWidth: { xs: '100%', sm: 460 }
-                            }}
-                          >
-                            <Paper 
-                              elevation={0}
-                              onClick={() => setZoomedDiagram(d)}
-                              sx={{ 
-                                p: 2, 
-                                border: '1px solid', 
-                                borderColor: 'divider',
-                                borderRadius: 2,
-                                cursor: 'zoom-in',
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                  boxShadow: 2,
-                                  borderColor: 'primary.light'
-                                }
+                            <Box
+                              key={`${d.diagram_id}-${index}`}
+                              sx={{
+                                flex: '1 1 auto',
+                                minWidth: { xs: '100%', sm: 200 },
+                                maxWidth: { xs: '100%', sm: 460 },
                               }}
                             >
-                              <Box
-                                component="img"
-                                src={toAbsoluteUrl(d.image_path)}
-                                alt={d.diagram_id}
+                              <Paper
+                                elevation={0}
+                                onClick={() => setZoomedDiagram(d)}
                                 sx={{
-                                  width: '100%',
-                                  height: 160,
-                                  objectFit: 'contain',
-                                  borderRadius: 1,
-                                  mb: 1,
-                                  backgroundColor: 'grey.100'
-                                }}
-                              />
-                              <Typography 
-                                variant="caption" 
-                                sx={{ 
-                                  display: 'block',
-                                  textAlign: 'center',
-                                  color: 'text.secondary',
-                                  fontFamily: 'monospace'
+                                  p: 2,
+                                  border: '1px solid',
+                                  borderColor: 'divider',
+                                  borderRadius: 2,
+                                  cursor: 'zoom-in',
+                                  transition: 'all 0.2s',
+                                  '&:hover': {
+                                    boxShadow: 2,
+                                    borderColor: 'primary.light',
+                                  },
                                 }}
                               >
-                                {d.diagram_id}
-                              </Typography>
-                            </Paper>
-
-                            {shouldShowDetailedExplanation && (
-                              <Paper variant="outlined" sx={{ p: 1.5, mt: 1.25 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                                  {diagramExplanation?.title || 'Giải thích chi tiết'}
+                                <Box
+                                  component="img"
+                                  src={toAbsoluteUrl(d.image_path)}
+                                  alt={d.diagram_id}
+                                  sx={{
+                                    width: '100%',
+                                    height: 160,
+                                    objectFit: 'contain',
+                                    borderRadius: 1,
+                                    mb: 1,
+                                    backgroundColor: 'grey.100',
+                                  }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'block',
+                                    textAlign: 'center',
+                                    color: 'text.secondary',
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  {d.diagram_id}
                                 </Typography>
 
-                                {diagramExplanation?.overview && (
-                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                    {diagramExplanation.overview}
-                                  </Typography>
-                                )}
-
-                                {!!diagramExplanation?.process_steps?.length && (
-                                  <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                      Quy trình
-                                    </Typography>
-                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
-                                      {diagramExplanation.process_steps.map((step: string, stepIdx: number) => (
-                                        <Typography key={`${step}-${stepIdx}`} variant="caption" color="text.secondary">
-                                          {stepIdx + 1}. {step}
-                                        </Typography>
-                                      ))}
-                                    </Stack>
-                                  </Box>
-                                )}
-
-                                {!!diagramExplanation?.key_takeaways?.length && (
-                                  <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                      Điểm cốt lõi
-                                    </Typography>
-                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
-                                      {diagramExplanation.key_takeaways.map((point: string, pointIdx: number) => (
-                                        <Typography key={`${point}-${pointIdx}`} variant="caption" color="text.secondary">
-                                          • {point}
-                                        </Typography>
-                                      ))}
-                                    </Stack>
-                                  </Box>
-                                )}
-
-                                {!!diagramExplanation?.applications?.length && (
-                                  <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                      Ứng dụng
-                                    </Typography>
-                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
-                                      {diagramExplanation.applications.map((application: string, appIdx: number) => (
-                                        <Typography key={`${application}-${appIdx}`} variant="caption" color="text.secondary">
-                                          • {application}
-                                        </Typography>
-                                      ))}
-                                    </Stack>
-                                  </Box>
-                                )}
-
-                                {!!diagramExplanation?.glossary?.length && (
-                                  <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                      Thuật ngữ
-                                    </Typography>
-                                    <Stack spacing={0.35} sx={{ mt: 0.4 }}>
-                                      {diagramExplanation.glossary.map((g: any, gIdx: number) => (
-                                        <Typography key={`${g?.term}-${gIdx}`} variant="caption" color="text.secondary">
-                                          • <strong>{g?.term}</strong>: {g?.definition}
-                                        </Typography>
-                                      ))}
-                                    </Stack>
-                                  </Box>
-                                )}
-
-                                {diagramExplanation?.learning_prompt && (
-                                  <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
-                                    <Typography variant="caption">
-                                      {diagramExplanation.learning_prompt}
-                                    </Typography>
-                                  </Alert>
+                                {diagramPdfUrl && (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<PictureAsPdfIcon fontSize="small" />}
+                                    sx={{ mt: 1, width: '100%' }}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      window.open(diagramPdfUrl, '_blank', 'noopener,noreferrer');
+                                    }}
+                                  >
+                                    Mở tài liệu PDF
+                                  </Button>
                                 )}
                               </Paper>
-                            )}
-                          </Box>
+
+                              {/* Query Results */}
+                              {response?.query_results?.map((item: any, idx: number) => (
+                                <Paper
+                                  key={`${item.triple?.subject}-${idx}`}
+                                  variant="outlined"
+                                  sx={{ p: 2 }}
+                                >
+                                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+                                    <Box component="span" sx={{ color: 'primary.main' }}>
+                                      {item.triple.subject}
+                                    </Box>{' '}
+                                    <Box component="span" sx={{ color: 'text.secondary' }}>
+                                      {item.triple.relationship}
+                                    </Box>{' '}
+                                    <Box component="span" sx={{ color: 'secondary.main' }}>
+                                      {item.triple.object}
+                                    </Box>
+                                  </Typography>
+
+                                  {item?.results?.descriptions?.length > 0 && (
+                                    <Box>
+                                      <Typography
+                                        variant="subtitle2"
+                                        sx={{ mb: 1, color: 'text.secondary', fontWeight: 600 }}
+                                      >
+                                        Mô tả ({item.results.descriptions.length})
+                                      </Typography>
+                                      <Stack spacing={1}>
+                                        {item.results.descriptions.map(
+                                          (desc: string, i: number) => (
+                                            <Box
+                                              key={`${desc}-${i}`}
+                                              sx={{
+                                                color: 'text.secondary',
+                                                fontSize: (theme) =>
+                                                  theme.typography.body2.fontSize,
+                                                lineHeight: 1.6,
+                                                pl: 1,
+                                                borderLeft: '2px solid',
+                                                borderColor: 'divider',
+                                                '& p': { mt: 0, mb: 0.75 },
+                                                '& p:last-of-type': { mb: 0 },
+                                              }}
+                                              dangerouslySetInnerHTML={renderSafeHtml(desc)}
+                                            />
+                                          )
+                                        )}
+                                      </Stack>
+                                    </Box>
+                                  )}
+
+                                  {item?.results?.diagrams?.length > 0 && (
+                                    <Box
+                                      sx={{ mt: item?.results?.descriptions?.length > 0 ? 2 : 0 }}
+                                    >
+                                      <Stack spacing={1.25}>
+                                        {item.results.diagrams.map((diagram: any, i: number) => {
+                                          const relatedDiagramPdfUrl = toAbsoluteUrl(
+                                            getDiagramPdfPath(diagram)
+                                          );
+                                          return (
+                                            <Paper
+                                              key={`${diagram?.diagram_id || 'diagram'}-${i}`}
+                                              variant="outlined"
+                                              sx={{ p: 1.25 }}
+                                            >
+                                              <Stack spacing={0.8}>
+                                                {diagram?.description && (
+                                                  <Box
+                                                    sx={{
+                                                      color: 'text.secondary',
+                                                      fontSize: (theme) =>
+                                                        theme.typography.body2.fontSize,
+                                                      lineHeight: 1.6,
+                                                      '& p': { mt: 0, mb: 0.75 },
+                                                      '& p:last-of-type': { mb: 0 },
+                                                    }}
+                                                    dangerouslySetInnerHTML={renderSafeHtml(
+                                                      diagram.description
+                                                    )}
+                                                  />
+                                                )}
+                                              </Stack>
+                                            </Paper>
+                                          );
+                                        })}
+                                      </Stack>
+                                    </Box>
+                                  )}
+                                </Paper>
+                              ))}
+                            </Box>
                           );
                         })}
                       </Box>
@@ -593,14 +670,25 @@ export function StemQueryView() {
                         Kết quả đầu ra đề xuất
                       </Typography>
                       {finalOutput.description && (
-                        <Typography variant="body2" sx={{ mb: 1.5 }}>
-                          {finalOutput.description}
-                        </Typography>
+                        <Box
+                          sx={{
+                            mb: 1.5,
+                            fontSize: (theme) => theme.typography.body2.fontSize,
+                            lineHeight: 1.6,
+                            '& p': { mt: 0, mb: 1 },
+                            '& p:last-of-type': { mb: 0 },
+                          }}
+                          dangerouslySetInnerHTML={renderSafeHtml(finalOutput.description)}
+                        />
                       )}
 
                       {!!videoRecommendations.length && (
                         <Stack spacing={0.8} sx={{ mt: 1.5 }}>
-                          <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                          <Typography
+                            variant="subtitle2"
+                            color="text.secondary"
+                            sx={{ fontWeight: 600 }}
+                          >
                             Video minh họa
                           </Typography>
 
@@ -645,7 +733,11 @@ export function StemQueryView() {
 
                           {!!secondaryVideos.length && (
                             <Paper variant="outlined" sx={{ p: 1.5 }}>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ mb: 1, fontWeight: 600 }}
+                              >
                                 Video tham khảo thêm ({secondaryVideos.length})
                               </Typography>
                               <Stack spacing={0.7}>
@@ -671,7 +763,11 @@ export function StemQueryView() {
                         <Stack spacing={1.5} sx={{ mt: 2 }}>
                           {scientificAnalysis.summary && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 Tóm tắt khoa học
                               </Typography>
                               <Typography variant="body2">{scientificAnalysis.summary}</Typography>
@@ -680,12 +776,20 @@ export function StemQueryView() {
 
                           {!!scientificAnalysis.key_points?.length && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 Ý chính
                               </Typography>
                               <Stack spacing={0.5}>
                                 {scientificAnalysis.key_points.map((point: string, idx: number) => (
-                                  <Typography key={`${point}-${idx}`} variant="body2" color="text.secondary">
+                                  <Typography
+                                    key={`${point}-${idx}`}
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
                                     • {point}
                                   </Typography>
                                 ))}
@@ -695,27 +799,46 @@ export function StemQueryView() {
 
                           {!!scientificAnalysis.reasoning_steps?.length && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 Chuỗi phân tích
                               </Typography>
                               <Stack spacing={0.5}>
-                                {scientificAnalysis.reasoning_steps.map((step: string, idx: number) => (
-                                  <Typography key={`${step}-${idx}`} variant="body2" color="text.secondary">
-                                    {idx + 1}. {step}
-                                  </Typography>
-                                ))}
+                                {scientificAnalysis.reasoning_steps.map(
+                                  (step: string, idx: number) => (
+                                    <Typography
+                                      key={`${step}-${idx}`}
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {idx + 1}. {step}
+                                    </Typography>
+                                  )
+                                )}
                               </Stack>
                             </Box>
                           )}
 
                           {!!scientificAnalysis.applications?.length && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 Ứng dụng thực tế
                               </Typography>
                               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                                 {scientificAnalysis.applications.map((app: string, idx: number) => (
-                                  <Chip key={`${app}-${idx}`} size="small" variant="outlined" label={app} />
+                                  <Chip
+                                    key={`${app}-${idx}`}
+                                    size="small"
+                                    variant="outlined"
+                                    label={app}
+                                  />
                                 ))}
                               </Stack>
                             </Box>
@@ -723,12 +846,20 @@ export function StemQueryView() {
 
                           {!!scientificAnalysis.glossary?.length && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600, mb: 0.5 }}
+                              >
                                 Thuật ngữ
                               </Typography>
                               <Stack spacing={0.5}>
                                 {scientificAnalysis.glossary.map((g: any, idx: number) => (
-                                  <Typography key={`${g?.term}-${idx}`} variant="body2" color="text.secondary">
+                                  <Typography
+                                    key={`${g?.term}-${idx}`}
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
                                     • <strong>{g?.term}</strong>: {g?.definition}
                                   </Typography>
                                 ))}
@@ -738,20 +869,26 @@ export function StemQueryView() {
 
                           {!!scientificAnalysis.recommended_queries?.length && (
                             <Box>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="subtitle2"
+                                color="text.secondary"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 Truy vấn gợi ý tiếp theo
                               </Typography>
                               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                {scientificAnalysis.recommended_queries.map((q: string, idx: number) => (
-                                  <Chip
-                                    key={`${q}-${idx}`}
-                                    size="small"
-                                    color="primary"
-                                    variant="outlined"
-                                    label={q}
-                                    onClick={() => setQueryText(q)}
-                                  />
-                                ))}
+                                {scientificAnalysis.recommended_queries.map(
+                                  (q: string, idx: number) => (
+                                    <Chip
+                                      key={`${q}-${idx}`}
+                                      size="small"
+                                      color="primary"
+                                      variant="outlined"
+                                      label={q}
+                                      onClick={() => setQueryText(q)}
+                                    />
+                                  )
+                                )}
                               </Stack>
                             </Box>
                           )}
@@ -762,7 +899,16 @@ export function StemQueryView() {
 
                   {triplesCount > 0 && (
                     <Paper variant="outlined" sx={{ p: 2 }}>
-                      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          mb: 1.5,
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
                         <DescriptionIcon />
                         Bộ ba được trích xuất ({triplesCount})
                       </Typography>
@@ -778,57 +924,145 @@ export function StemQueryView() {
                     </Paper>
                   )}
 
-                  {/* Query Results */}
-                  {response?.query_results?.map((item: any, idx: number) => (
-                    <Paper key={`${item.triple?.subject}-${idx}`} variant="outlined" sx={{ p: 2 }}>
-                      
-                      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-                        <Box component="span" sx={{ color: 'primary.main' }}>{item.triple.subject}</Box>
-                        {' '}
-                        <Box component="span" sx={{ color: 'text.secondary' }}>{item.triple.relationship}</Box>
-                        {' '}
-                        <Box component="span" sx={{ color: 'secondary.main' }}>{item.triple.object}</Box>
+                  {Boolean(diagramExplanation) && (
+                    <Paper variant="outlined" sx={{ p: 1.5, mt: 1.25 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                        {diagramExplanation?.title || 'Giải thích chi tiết'}
                       </Typography>
 
-                      {item?.results?.descriptions?.length > 0 && (
-                        <Box>
-                          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 600 }}>
-                            Mô tả ({item.results.descriptions.length})
+                      {diagramExplanation?.overview && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {diagramExplanation.overview}
+                        </Typography>
+                      )}
+
+                      {!!diagramExplanation?.process_steps?.length && (
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Quy trình
                           </Typography>
-                          <Stack spacing={1}>
-                            {item.results.descriptions.map((desc: string, i: number) => (
-                              <Typography key={`${desc}-${i}`} variant="body2" color="text.secondary">
-                                • {desc}
+                          <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                            {diagramExplanation.process_steps.map(
+                              (step: string, stepIdx: number) => (
+                                <Typography
+                                  key={`${step}-${stepIdx}`}
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {stepIdx + 1}. {step}
+                                </Typography>
+                              )
+                            )}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {!!diagramExplanation?.key_takeaways?.length && (
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Điểm cốt lõi
+                          </Typography>
+                          <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                            {diagramExplanation.key_takeaways.map(
+                              (point: string, pointIdx: number) => (
+                                <Typography
+                                  key={`${point}-${pointIdx}`}
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  • {point}
+                                </Typography>
+                              )
+                            )}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {!!diagramExplanation?.applications?.length && (
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Ứng dụng
+                          </Typography>
+                          <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                            {diagramExplanation.applications.map(
+                              (application: string, appIdx: number) => (
+                                <Typography
+                                  key={`${application}-${appIdx}`}
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  • {application}
+                                </Typography>
+                              )
+                            )}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {!!diagramExplanation?.glossary?.length && (
+                        <Box sx={{ mb: 1 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Thuật ngữ
+                          </Typography>
+                          <Stack spacing={0.35} sx={{ mt: 0.4 }}>
+                            {diagramExplanation.glossary.map((g: any, gIdx: number) => (
+                              <Typography
+                                key={`${g?.term}-${gIdx}`}
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                • <strong>{g?.term}</strong>: {g?.definition}
                               </Typography>
                             ))}
                           </Stack>
                         </Box>
                       )}
-                    </Paper>
-                  ))}
 
-                  
+                      {diagramExplanation?.learning_prompt && (
+                        <Alert severity="info" sx={{ py: 0.5, mt: 0.5 }}>
+                          <Typography variant="caption">
+                            {diagramExplanation.learning_prompt}
+                          </Typography>
+                        </Alert>
+                      )}
+                    </Paper>
+                  )}
                 </Stack>
               )}
             </CardContent>
-            
+
             {response && (
-              <CardActions sx={{ 
-                p: 2, 
-                pt: 0, 
-                justifyContent: 'space-between', 
-                borderTop: '1px solid', 
-                borderColor: 'divider',
-                mt: 'auto'
-              }}>
+              <CardActions
+                sx={{
+                  p: 2,
+                  pt: 0,
+                  justifyContent: 'space-between',
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  mt: 'auto',
+                }}
+              >
                 <Typography variant="caption" color="text.secondary">
-                  {descriptionsCount} mô tả • {diagrams.length} hình ảnh • {response?.query?.phase || 'unknown phase'}
+                  {descriptionsCount} mô tả • {diagrams.length} hình ảnh •{' '}
+                  {response?.query?.phase || 'unknown phase'}
                 </Typography>
-                <Button 
-                  size="small" 
-                  onClick={handleClear}
-                  sx={{ borderRadius: 1 }}
-                >
+                <Button size="small" onClick={handleClear} sx={{ borderRadius: 1 }}>
                   Xóa kết quả
                 </Button>
               </CardActions>
@@ -853,7 +1087,7 @@ export function StemQueryView() {
               right: 12,
               backgroundColor: 'background.paper',
               zIndex: 1,
-              '&:hover': { backgroundColor: 'grey.100' }
+              '&:hover': { backgroundColor: 'grey.100' },
             }}
           >
             ✕
@@ -868,7 +1102,7 @@ export function StemQueryView() {
                 maxHeight: '85vh',
                 objectFit: 'contain',
                 borderRadius: 1,
-                backgroundColor: 'grey.100'
+                backgroundColor: 'grey.100',
               }}
             />
           )}

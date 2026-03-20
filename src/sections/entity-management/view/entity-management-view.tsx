@@ -1,33 +1,37 @@
 import { useState, useEffect, useMemo } from 'react';
+import { CKEditor } from '@ckeditor/ckeditor5-react';
 
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import {
-  Container,
-  Typography,
+  Alert,
   Box,
-  Tabs,
-  Tab,
   Button,
+  Checkbox,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  Link,
+  MenuItem,
+  Paper,
+  Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Alert,
-  MenuItem,
   TablePagination,
-  FormControlLabel,
-  Checkbox,
+  TableRow,
+  Tabs,
+  TextField,
+  Typography,
 } from '@mui/material';
 
+import { Editor } from '../../../utils/custom-editor';
 import * as entityService from '../../../services/entityService';
 
 import type {
@@ -113,13 +117,15 @@ const TAB_FILTER_CONFIG: Record<TabKey, { searchFields: string[]; filterOptions:
     ],
   },
   diagrams: {
-    searchFields: ['id', 'root_category_id', 'category_name', 'category_id', 'trigger_code', 'image_path', 'processed'],
+    searchFields: ['id', 'root_category_id', 'category_name', 'category_id', 'trigger_code', 'image_path', 'description', 'path_pdf', 'processed'],
     filterOptions: [
       { value: 'id', label: 'ID' },
       { value: 'root_category_id', label: 'Root Category' },
       { value: 'category_name', label: 'Category Name' },
       { value: 'category_id', label: 'Category ID' },
       { value: 'trigger_code', label: 'Trigger Code' },
+      { value: 'description', label: 'Description' },
+      { value: 'path_pdf', label: 'PDF Link' },
       { value: 'processed', label: 'Processed' },
     ],
   },
@@ -197,6 +203,33 @@ export default function EntityManagementView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [currentEntity, setCurrentEntity] = useState<any>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailEntity, setDetailEntity] = useState<any>(null);
+  const [detailTitle, setDetailTitle] = useState('');
+
+  const ckEditorConfig = useMemo(
+    () => ({
+      plugins: Editor.plugins,
+      toolbar: Editor.toolbar,
+      licenseKey: 'GPL',
+    }),
+    []
+  );
+
+  const stripHtml = (value: string): string => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const truncateText = (value: unknown, maxLength = 56): string => {
+    if (value === null || value === undefined) return '-';
+    const normalized = typeof value === 'string' ? stripHtml(value) : String(value);
+    if (!normalized) return '-';
+    return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+  };
+
+  const renderEllipsisCell = (value: unknown, maxLength = 56) => (
+    <Box title={typeof value === 'string' ? stripHtml(value) : String(value || '')} sx={{ maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {truncateText(value, maxLength)}
+    </Box>
+  );
 
   const toStringArray = (value: unknown): string[] => {
     if (!value) return [];
@@ -381,6 +414,10 @@ export default function EntityManagementView() {
         nextEntity.category_name
       );
     }
+    if (tabValue === 5) {
+      nextEntity.description = nextEntity.description || '';
+      nextEntity.path_pdf = nextEntity.path_pdf || '';
+    }
     setCurrentEntity(nextEntity);
     setDialogOpen(true);
   };
@@ -388,6 +425,18 @@ export default function EntityManagementView() {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setCurrentEntity(null);
+  };
+
+  const handleOpenDetail = (title: string, entity: any) => {
+    setDetailTitle(title);
+    setDetailEntity(entity);
+    setDetailOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setDetailOpen(false);
+    setDetailEntity(null);
+    setDetailTitle('');
   };
 
   const handleSave = async () => {
@@ -500,6 +549,9 @@ export default function EntityManagementView() {
     const rawValue = item?.[field];
     if (field === 'synonyms' || field === 'categories') {
       return toStringArray(rawValue).join(', ');
+    }
+    if (field === 'description' && typeof rawValue === 'string') {
+      return stripHtml(rawValue);
     }
     if (typeof rawValue === 'boolean') {
       return rawValue ? 'yes' : 'no';
@@ -717,15 +769,17 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('name', e.target.value)}
             margin="normal"
           />
-          <TextField
-            fullWidth
-            label="Description"
-            value={currentEntity.description || ''}
-            onChange={(e) => handleFieldChange('description', e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
         </>
       );
     }
@@ -773,15 +827,17 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('level', parseInt(e.target.value))}
             margin="normal"
           />
-          <TextField
-            fullWidth
-            label="Description"
-            value={currentEntity.description || ''}
-            onChange={(e) => handleFieldChange('description', e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
         </>
       );
     }
@@ -805,15 +861,17 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('name', e.target.value)}
             margin="normal"
           />
-          <TextField
-            fullWidth
-            label="Description"
-            value={currentEntity.description || ''}
-            onChange={(e) => handleFieldChange('description', e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
           <TextField
             fullWidth
             label="Parent ID"
@@ -870,15 +928,17 @@ export default function EntityManagementView() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            fullWidth
-            label="Description"
-            value={currentEntity.description || ''}
-            onChange={(e) => handleFieldChange('description', e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
           <TextField
             fullWidth
             label="Synonyms"
@@ -941,15 +1001,17 @@ export default function EntityManagementView() {
             placeholder="e.g., trophic, spatial, temporal"
             helperText="Used to generate relationship code"
           />
-          <TextField
-            fullWidth
-            label="Description"
-            value={currentEntity.description || ''}
-            onChange={(e) => handleFieldChange('description', e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-          />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
           <TextField
             fullWidth
             label="Inverse Relationship"
@@ -1038,6 +1100,25 @@ export default function EntityManagementView() {
             onChange={(e) => handleFieldChange('image_path', e.target.value)}
             margin="normal"
           />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Description (HTML)
+            </Typography>
+            <CKEditor
+              editor={Editor.ClassicEditor as any}
+              config={ckEditorConfig as any}
+              data={currentEntity.description || ''}
+              onChange={(_event, editor) => handleFieldChange('description', editor.getData())}
+            />
+          </Box>
+          <TextField
+            fullWidth
+            label="PDF Link"
+            value={currentEntity.path_pdf || ''}
+            onChange={(e) => handleFieldChange('path_pdf', e.target.value)}
+            margin="normal"
+            placeholder="https://.../document.pdf"
+          />
         </>
       );
     }
@@ -1101,8 +1182,11 @@ export default function EntityManagementView() {
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.description, 52)}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Root Category Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1162,6 +1246,9 @@ export default function EntityManagementView() {
                   <TableCell>{item.root_category_id}</TableCell>
                   <TableCell>{item.level}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Category Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1219,10 +1306,13 @@ export default function EntityManagementView() {
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.description, 52)}</TableCell>
                   <TableCell>{item.parent_id}</TableCell>
                   <TableCell>{item.level}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Root Subject Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1282,10 +1372,13 @@ export default function EntityManagementView() {
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.root_subject_id}</TableCell>
-                  <TableCell>{toStringArray(item.synonyms).join(', ')}</TableCell>
-                  <TableCell>{toStringArray(item.categories).join(', ')}</TableCell>
-                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{renderEllipsisCell(toStringArray(item.synonyms).join(', '), 40)}</TableCell>
+                  <TableCell>{renderEllipsisCell(toStringArray(item.categories).join(', '), 40)}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.description, 52)}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Subject Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1342,9 +1435,12 @@ export default function EntityManagementView() {
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.description}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.description, 52)}</TableCell>
                   <TableCell>{item.semantic_type}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Relationship Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1460,10 +1556,10 @@ export default function EntityManagementView() {
                 <TableCell>ID</TableCell>
                 <TableCell>Root Category</TableCell>
                 <TableCell>Category Name</TableCell>
-                <TableCell>Category ID</TableCell>
                 <TableCell>Trigger Code</TableCell>
                 <TableCell>Image Path</TableCell>
-                <TableCell>Processed</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>PDF Link</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -1473,11 +1569,14 @@ export default function EntityManagementView() {
                   <TableCell>{item.id}</TableCell>
                   <TableCell>{item.root_category_id || '-'}</TableCell>
                   <TableCell>{item.category_name || '-'}</TableCell>
-                  <TableCell>{item.category_id}</TableCell>
                   <TableCell>{item.trigger_code || '-'}</TableCell>
-                  <TableCell>{item.image_path}</TableCell>
-                  <TableCell>{item.processed ? 'Yes' : 'No'}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.image_path, 30)}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.description, 20)}</TableCell>
+                  <TableCell>{renderEllipsisCell(item.path_pdf, 20)}</TableCell>
                   <TableCell>
+                    <IconButton onClick={() => handleOpenDetail('Diagram Detail', item)}>
+                      <VisibilityIcon />
+                    </IconButton>
                     <IconButton onClick={() => handleOpenDialog('edit', item)}>
                       <EditIcon />
                     </IconButton>
@@ -1514,6 +1613,60 @@ export default function EntityManagementView() {
           <Button onClick={handleSave} variant="contained">
             Save
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={detailOpen} onClose={handleCloseDetail} maxWidth="md" fullWidth>
+        <DialogTitle>{detailTitle}</DialogTitle>
+        <DialogContent dividers>
+          {detailEntity && (
+            <Stack spacing={2}>
+              {Object.entries(detailEntity).map(([key, value]) => {
+                if (value === null || value === undefined || value === '') return null;
+
+                if (key === 'description' && typeof value === 'string') {
+                  return (
+                    <Box key={key}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, textTransform: 'capitalize' }}>
+                        {key}
+                      </Typography>
+                      <Paper variant="outlined" sx={{ p: 2, maxHeight: 320, overflow: 'auto' }}>
+                        <Box dangerouslySetInnerHTML={{ __html: value }} />
+                      </Paper>
+                    </Box>
+                  );
+                }
+
+                if (key === 'path_pdf' && typeof value === 'string') {
+                  return (
+                    <Box key={key}>
+                      <Typography variant="subtitle2" sx={{ mb: 0.5, textTransform: 'capitalize' }}>
+                        {key}
+                      </Typography>
+                      <Link href={value} target="_blank" rel="noopener noreferrer">
+                        {value}
+                      </Link>
+                    </Box>
+                  );
+                }
+
+                const displayValue = Array.isArray(value) ? value.join(', ') : String(value);
+                return (
+                  <Box key={key}>
+                    <Typography variant="subtitle2" sx={{ mb: 0.5, textTransform: 'capitalize' }}>
+                      {key}
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {displayValue}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetail}>Close</Button>
         </DialogActions>
       </Dialog>
     </Container>

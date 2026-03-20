@@ -12,7 +12,13 @@ export type StemQueryResponse = {
     image_url?: string | null;
   };
   final_output?: {
-    diagram?: { diagram_id?: string; image_path?: string; category_id?: number } | null;
+    diagram?: {
+      diagram_id?: string;
+      image_path?: string;
+      category_id?: number;
+      description?: string;
+      path_pdf?: string;
+    } | null;
     description?: string;
     video_recommendations?: Array<{ title?: string; url?: string }>;
     diagram_explanation?: {
