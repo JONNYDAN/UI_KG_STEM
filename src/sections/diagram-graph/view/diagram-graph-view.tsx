@@ -547,7 +547,7 @@ export function DiagramGraphView() {
                           window.open(diagram.path_pdf, '_blank', 'noopener,noreferrer');
                         }}
                       >
-                        tài liệu tham khảo
+                        Tài liệu tham khảo
                       </Button>
                     )}
                   </CardContent>
@@ -604,7 +604,7 @@ export function DiagramGraphView() {
                       onClick={() => setDiagramImageOpen(true)}
                       disabled={!selectedDiagramImageUrl}
                     >
-                      xem hình diagram
+                      Image
                     </Button>
 
                     <Button
@@ -614,7 +614,7 @@ export function DiagramGraphView() {
                       onClick={() => setDescriptionOpen(true)}
                       disabled={!hasDescription}
                     >
-                      xem description
+                      Description
                     </Button>
 
                     {hasPdf && (
@@ -625,7 +625,7 @@ export function DiagramGraphView() {
                         startIcon={<PictureAsPdfIcon fontSize="small" />}
                         onClick={handleOpenPdf}
                       >
-                        tài liệu tham khảo
+                        Tài liệu tham khảo
                       </Button>
                     )}
                   </Stack>
