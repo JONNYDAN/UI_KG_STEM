@@ -1,3 +1,5 @@
+import type { StemAnalysisMode } from 'src/services/stemQueryService';
+
 import DOMPurify from 'dompurify';
 import { useMemo, useState } from 'react';
 
@@ -8,23 +10,27 @@ import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
+import Radio from '@mui/material/Radio';
 import Dialog from '@mui/material/Dialog';
 import Button from '@mui/material/Button';
-import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
+import FormLabel from '@mui/material/FormLabel';
 import Typography from '@mui/material/Typography';
 import CardHeader from '@mui/material/CardHeader';
 import IconButton from '@mui/material/IconButton';
 import ImageIcon from '@mui/icons-material/Image';
+import RadioGroup from '@mui/material/RadioGroup';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
 import SearchIcon from '@mui/icons-material/Search';
+import FormControl from '@mui/material/FormControl';
 import DialogContent from '@mui/material/DialogContent';
 import LinearProgress from '@mui/material/LinearProgress';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DescriptionIcon from '@mui/icons-material/Description';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
 import { useAuth } from 'src/contexts/AuthContext';
@@ -91,6 +97,7 @@ export function StemQueryView() {
   const [queryText, setQueryText] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [analysisMode, setAnalysisMode] = useState<StemAnalysisMode | ''>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [response, setResponse] = useState<any>(null);
@@ -117,6 +124,11 @@ export function StemQueryView() {
       return;
     }
 
+    if (!analysisMode) {
+      setError('Vui lòng chọn chế độ phân tích trước khi kích hoạt truy vấn');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -124,6 +136,7 @@ export function StemQueryView() {
         queryText: queryText.trim() || undefined,
         imageFile,
         userId: user?.id,
+        analysisMode,
       });
       setResponse(result);
     } catch (err: any) {
@@ -144,6 +157,7 @@ export function StemQueryView() {
     setQueryText('');
     setImageFile(null);
     setImagePreview('');
+    setAnalysisMode('');
     setResponse(null);
     setError('');
     setZoomedDiagram(null);
@@ -206,7 +220,7 @@ export function StemQueryView() {
             sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <PsychologyIcon fontSize="large" />
-            Truy vấn Ảnh STEM
+            Truy vấn STEM
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Nhập câu hỏi văn bản, tải ảnh (hoặc cả hai) để hệ thống phân tích và đề xuất diagram phù
@@ -215,6 +229,10 @@ export function StemQueryView() {
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip size="small" label={`Phase: ${response?.query?.phase || 'idle'}`} />
             <Chip size="small" label={`Routing: ${response?.query?.routing_mode || 'N/A'}`} />
+            <Chip
+              size="small"
+              label={`Mode: ${response?.query?.analysis_mode || analysisMode || 'Chưa chọn'}`}
+            />
             <Chip size="small" label={`Diagrams: ${diagrams.length}`} />
           </Stack>
         </Stack>
@@ -270,6 +288,33 @@ export function StemQueryView() {
                     startAdornment: <DescriptionIcon sx={{ mr: 1, color: 'action.active' }} />,
                   }}
                 />
+
+                <FormControl component="fieldset" disabled={loading} required>
+                  <FormLabel component="legend">Chế độ phân tích</FormLabel>
+                  <RadioGroup
+                    row
+                    value={analysisMode}
+                    onChange={(event) => {
+                      setAnalysisMode(event.target.value as StemAnalysisMode);
+                      setError('');
+                    }}
+                  >
+                    <FormControlLabel
+                      value="basic"
+                      control={<Radio />}
+                      label="Phân tích cơ bản (nhanh hơn)"
+                    />
+                    <FormControlLabel
+                      value="gemini"
+                      control={<Radio />}
+                      label="Phân tích Gemini (chậm hơn, sâu hơn)"
+                    />
+                  </RadioGroup>
+                  <Typography variant="caption" color="text.secondary">
+                    Chọn Phân tích cơ bản để ưu tiên tốc độ phản hồi, hoặc Gemini để ưu tiên chiều
+                    sâu phân tích.
+                  </Typography>
+                </FormControl>
 
                 <Box>
                   <Typography
@@ -369,7 +414,7 @@ export function StemQueryView() {
               <Button
                 variant="contained"
                 onClick={handleSubmit}
-                disabled={loading || (!queryText.trim() && !imageFile)}
+                disabled={loading || (!queryText.trim() && !imageFile) || !analysisMode}
                 startIcon={
                   loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />
                 }
@@ -421,7 +466,7 @@ export function StemQueryView() {
               title={
                 <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PsychologyIcon />
-                  Kết quả Truy vấn
+                  Kết quả truy vấn
                 </Typography>
               }
             />

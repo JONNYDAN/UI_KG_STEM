@@ -1,5 +1,7 @@
 import api from './api';
 
+export type StemAnalysisMode = 'basic' | 'gemini';
+
 export type StemQueryResponse = {
   success: boolean;
   log_id?: string;
@@ -9,6 +11,7 @@ export type StemQueryResponse = {
     normalized_text?: string | null;
     routing_mode?: string | null;
     phase?: string | null;
+    analysis_mode?: StemAnalysisMode;
     image_url?: string | null;
   };
   final_output?: {
@@ -63,11 +66,13 @@ export const submitStemQuery = async (payload: {
   queryText?: string;
   imageFile?: File | null;
   userId?: string;
+  analysisMode: StemAnalysisMode;
 }) => {
   const formData = new FormData();
   if (payload.queryText) formData.append('query_text', payload.queryText);
   if (payload.imageFile) formData.append('image', payload.imageFile);
   if (payload.userId) formData.append('user_id', payload.userId);
+  formData.append('analysis_mode', payload.analysisMode);
 
   const response = await api.post('/integration/query', formData, {
     headers: {
