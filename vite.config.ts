@@ -32,14 +32,24 @@ export default defineConfig({
     ],
   },
 
-  server: { 
-    port: PORT, 
+  server: {
+    port: PORT,
     host: true,
-    allowedHosts: ['dgxl.hcmue.edu.vn'] 
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://api:8000',
+        changeOrigin: true,
+      },
+      '/images': {
+        target: 'http://api:8000',
+        changeOrigin: true,
+      },
+    },
   },
-  preview: { 
-    port: PORT, 
+  preview: {
+    port: PORT,
     host: true,
-    allowedHosts: ['dgxl.hcmue.edu.vn'] 
+    allowedHosts: true,
   },
 });
