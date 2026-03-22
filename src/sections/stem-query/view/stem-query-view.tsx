@@ -91,6 +91,11 @@ const getYouTubeEmbedUrl = (url?: string) => {
   return '';
 };
 
+const formatPriorityScore = (score?: number) => {
+  if (typeof score !== 'number' || Number.isNaN(score)) return null;
+  return score.toFixed(2);
+};
+
 export function StemQueryView() {
   const { user } = useAuth();
 
@@ -220,7 +225,7 @@ export function StemQueryView() {
             sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <PsychologyIcon fontSize="large" />
-            Truy vấn STEM
+            Truy vấn học liệu STEM
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Nhập câu hỏi văn bản, tải ảnh (hoặc cả hai) để hệ thống phân tích và đề xuất diagram phù
@@ -743,6 +748,24 @@ export function StemQueryView() {
                                 {primaryVideo?.title || 'Video chính'}
                               </Typography>
 
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                                {primaryVideo?.keyword && (
+                                  <Chip
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                    label={`Keyword: ${primaryVideo.keyword}`}
+                                  />
+                                )}
+                                {formatPriorityScore(primaryVideo?.priority_score) && (
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={`Priority: ${formatPriorityScore(primaryVideo?.priority_score)}`}
+                                  />
+                                )}
+                              </Stack>
+
                               {primaryEmbedUrl ? (
                                 <Box
                                   component="iframe"
@@ -787,16 +810,39 @@ export function StemQueryView() {
                               </Typography>
                               <Stack spacing={0.7}>
                                 {secondaryVideos.map((video: any, idx: number) => (
-                                  <Link
-                                    key={`${video?.url}-${idx}`}
-                                    href={video?.url || '#'}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    underline="hover"
-                                    variant="body2"
-                                  >
-                                    {video?.title || `Video ${idx + 2}`}
-                                  </Link>
+                                  <Box key={`${video?.url}-${idx}`}>
+                                    <Link
+                                      href={video?.url || '#'}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      underline="hover"
+                                      variant="body2"
+                                    >
+                                      {video?.title || `Video ${idx + 2}`}
+                                    </Link>
+                                    <Stack
+                                      direction="row"
+                                      spacing={0.8}
+                                      flexWrap="wrap"
+                                      useFlexGap
+                                      sx={{ mt: 0.4 }}
+                                    >
+                                      {video?.keyword && (
+                                        <Chip
+                                          size="small"
+                                          variant="outlined"
+                                          label={`Keyword: ${video.keyword}`}
+                                        />
+                                      )}
+                                      {formatPriorityScore(video?.priority_score) && (
+                                        <Chip
+                                          size="small"
+                                          variant="outlined"
+                                          label={`Priority: ${formatPriorityScore(video?.priority_score)}`}
+                                        />
+                                      )}
+                                    </Stack>
+                                  </Box>
                                 ))}
                               </Stack>
                             </Paper>

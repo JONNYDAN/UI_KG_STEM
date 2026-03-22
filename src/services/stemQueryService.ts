@@ -23,7 +23,12 @@ export type StemQueryResponse = {
       path_pdf?: string;
     } | null;
     description?: string;
-    video_recommendations?: Array<{ title?: string; url?: string }>;
+    video_recommendations?: Array<{
+      title?: string;
+      url?: string;
+      keyword?: string;
+      priority_score?: number;
+    }>;
     diagram_explanation?: {
       title?: string;
       overview?: string;

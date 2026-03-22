@@ -163,12 +163,12 @@ export function NavContent({ data, slots, workspaces, sx, collapsed }: NavConten
   return (
     <>
       {/* Logo - Ẩn khi thu gọn */}
-      {!collapsed && <Logo />}
+      {/* {!collapsed && <Logo />}
       {collapsed && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
           <Logo sx={{ width: 50, height: 40 }} />
         </Box>
-      )}
+      )} */}
 
       {slots?.topArea}
 
@@ -247,7 +247,7 @@ export function NavContent({ data, slots, workspaces, sx, collapsed }: NavConten
       {slots?.bottomArea}
 
       {/* Ẩn NavUpgrade khi thu gọn */}
-      {!collapsed && <NavUpgrade />}
+      {/* {!collapsed && <NavUpgrade />} */}
     </>
   );
 }
