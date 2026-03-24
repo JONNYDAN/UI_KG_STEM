@@ -20,11 +20,11 @@ export const baseNavData: NavItem[] = [
     path: '/stem/query',
     icon: icon('majesticons--search'),
   },
-  {
-    title: 'Đồ thị tri thức',
-    path: '/stem/diagram-graph',
-    icon: icon('grommet-icons--nodes'),
-  },
+  // {
+  //   title: 'Đồ thị tri thức',
+  //   path: '/stem/diagram-graph',
+  //   icon: icon('grommet-icons--nodes'),
+  // },
 ];
 
 // Create admin-specific nav items
@@ -33,6 +33,12 @@ const createRoleBasedNavItems = (userRole: string): NavItem[] => {
 
   // Admin-only routes
   if (['admin', 'ADMIN'].includes(userRole)) {
+
+    items.push({
+      title: 'Đồ thị tri thức',
+      path: '/stem/diagram-graph',
+      icon: icon('grommet-icons--nodes'),
+    });
     items.push({
       title: 'Xem Logs Truy vấn',
       path: '/stem/admin',
