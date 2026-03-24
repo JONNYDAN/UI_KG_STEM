@@ -21,7 +21,7 @@ import {
   rejectPendingLearningItem,
 } from 'src/services/stemQueryService';
 
-const API_URL = import.meta.env.VITE_API_URL as string;
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const toAbsoluteUrl = (path?: string | null) => {
   if (!path) return '';
