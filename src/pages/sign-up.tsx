@@ -7,7 +7,7 @@ import { SignUpView } from 'src/sections/auth';
 export default function Page() {
   return (
     <>
-      <title>{`Sign up - ${CONFIG.appName}`}</title>
+      <title>{`Thông tin tài khoản - ${CONFIG.appName}`}</title>
 
       <SignUpView />
     </>

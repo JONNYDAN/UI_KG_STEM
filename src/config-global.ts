@@ -8,6 +8,6 @@ export type ConfigValue = {
 };
 
 export const CONFIG: ConfigValue = {
-  appName: 'Phiếu đánh giá, xếp loại chất lượng viên chức HCMUE',
+  appName: 'Etechs EDS',
   appVersion: packageJson.version,
 };

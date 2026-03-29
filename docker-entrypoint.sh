@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+CONFIG_FILE="/usr/share/nginx/html/config.js"
+
+API_URL="${VITE_API_URL:-/api}"
+API_BASE_URL="${VITE_API_BASE_URL:-$API_URL}"
+OIDC_ISSUER="${VITE_OIDC_ISSUER:-}"
+OIDC_CLIENT_ID="${VITE_OIDC_CLIENT_ID:-}"
+OIDC_REDIRECT_URI="${VITE_OIDC_REDIRECT_URI:-}"
+OIDC_POST_LOGOUT_REDIRECT_URI="${VITE_OIDC_POST_LOGOUT_REDIRECT_URI:-}"
+
+cat <<EOF > "$CONFIG_FILE"
+window.__ENV__ = {
+  VITE_API_URL: "${API_URL}",
+  VITE_API_BASE_URL: "${API_BASE_URL}"$(if [ -n "$OIDC_ISSUER" ]; then printf ',\n  VITE_OIDC_ISSUER: "%s"' "$OIDC_ISSUER"; fi)$(if [ -n "$OIDC_CLIENT_ID" ]; then printf ',\n  VITE_OIDC_CLIENT_ID: "%s"' "$OIDC_CLIENT_ID"; fi)$(if [ -n "$OIDC_REDIRECT_URI" ]; then printf ',\n  VITE_OIDC_REDIRECT_URI: "%s"' "$OIDC_REDIRECT_URI"; fi)$(if [ -n "$OIDC_POST_LOGOUT_REDIRECT_URI" ]; then printf ',\n  VITE_OIDC_POST_LOGOUT_REDIRECT_URI: "%s"' "$OIDC_POST_LOGOUT_REDIRECT_URI"; fi)
+};
+EOF
+
+exec "$@"

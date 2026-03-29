@@ -1,13 +1,6 @@
 import type { CSSObject, Breakpoint } from '@mui/material/styles';
 
-import { merge } from 'es-toolkit';
-import { useLocation } from 'react-router-dom';
-
 import Box from '@mui/material/Box';
-import Link from '@mui/material/Link';
-import Alert from '@mui/material/Alert';
-
-import { RouterLink } from 'src/routes/components';
 
 import { Logo } from 'src/components/logo';
 
@@ -146,16 +139,20 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           slotProps={{ container: { maxWidth: false } }}
           slots={{
             topArea: (
-              <Alert severity="info" sx={{ display: 'none', borderRadius: 0 }}>
-                This is an info Alert.
-              </Alert>
+              <></>
             ),
             leftArea: <Logo />,
             rightArea: (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Link href="#" component={RouterLink} color="inherit" sx={{ typography: 'subtitle2' }}>
-                  {/* Need help? */}
-                </Link>  
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  typography: 'subtitle2',
+                  color: 'text.secondary',
+                }}
+              >
+                Etechs Education Data System
               </Box>
             ),
           }}
@@ -222,5 +219,5 @@ const backgroundStyles = (): CSSObject => ({
   backgroundRepeat: 'no-repeat',
   // backgroundPosition: 'center center',
   // backgroundImage: 'url(/assets/background/overlay.jpg)',
-  backgroundImage: 'url(/hcmue_white_bg.png)',          
+  backgroundImage: 'linear-gradient(180deg, rgba(14,78,90,0.08) 0%, rgba(14,78,90,0.02) 100%), url(/hcmue_white_bg.png)',
 });

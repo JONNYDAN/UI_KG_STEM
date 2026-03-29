@@ -10,10 +10,18 @@ interface User {
   photoURL: string;
 }
 
+interface AuthSession {
+  access: string;
+  refresh?: string;
+  tenant_slug?: string;
+  tenant_context?: Record<string, any>;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (userData: User, authToken: string) => void;
+  session: AuthSession | null;
+  login: (userData: User, authToken: string, sessionData?: Partial<AuthSession>) => void;
   logout: () => void;
   isAuthenticated: boolean;
   hasRole: (requiredRoles: string | string[]) => boolean;
@@ -31,6 +39,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isTokenValid, setIsTokenValid] = useState<boolean>(false); // Thêm state kiểm tra token
 
@@ -76,6 +85,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Kiểm tra localStorage khi component mount
     const storedToken = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('user');
+    const storedRefreshToken = localStorage.getItem('refreshToken') || undefined;
+    const storedTenantSlug = localStorage.getItem('tenantSlug') || undefined;
+    const storedTenantContextRaw = localStorage.getItem('tenantContext');
+
+    let storedTenantContext: Record<string, any> | undefined;
+    if (storedTenantContextRaw) {
+      try {
+        storedTenantContext = JSON.parse(storedTenantContextRaw);
+      } catch {
+        storedTenantContext = undefined;
+      }
+    }
 
     if (storedToken && storedUser) {
       // Kiểm tra token có hợp lệ không
@@ -84,10 +105,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (tokenValid) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
+        setSession({
+          access: storedToken,
+          refresh: storedRefreshToken,
+          tenant_slug: storedTenantSlug,
+          tenant_context: storedTenantContext,
+        });
         setIsTokenValid(true);
       } else {
         // Token hết hạn, xóa dữ liệu đăng nhập
         localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('tenantSlug');
+        localStorage.removeItem('tenantContext');
         localStorage.removeItem('user');
         setIsTokenValid(false);
       }
@@ -98,19 +128,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
   }, []);
 
-  const login = (userData: User, authToken: string) => {
+  const login = (userData: User, authToken: string, sessionData?: Partial<AuthSession>) => {
     setUser(userData);
     setToken(authToken);
+    const nextSession: AuthSession = {
+      access: authToken,
+      refresh: sessionData?.refresh,
+      tenant_slug: sessionData?.tenant_slug,
+      tenant_context: sessionData?.tenant_context,
+    };
+    setSession(nextSession);
     setIsTokenValid(true);
+
     localStorage.setItem('authToken', authToken);
     localStorage.setItem('user', JSON.stringify(userData));
+
+    if (nextSession.refresh) {
+      localStorage.setItem('refreshToken', nextSession.refresh);
+    } else {
+      localStorage.removeItem('refreshToken');
+    }
+
+    if (nextSession.tenant_slug) {
+      localStorage.setItem('tenantSlug', nextSession.tenant_slug);
+    } else {
+      localStorage.removeItem('tenantSlug');
+    }
+
+    if (nextSession.tenant_context) {
+      localStorage.setItem('tenantContext', JSON.stringify(nextSession.tenant_context));
+    } else {
+      localStorage.removeItem('tenantContext');
+    }
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
+    setSession(null);
     setIsTokenValid(false);
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('tenantSlug');
+    localStorage.removeItem('tenantContext');
     localStorage.removeItem('user');
   };
 
@@ -133,6 +193,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     user,
     token,
+    session,
     login,
     logout,
     isAuthenticated: !!user && !!token && isTokenValid, // Cập nhật để bao gồm kiểm tra token

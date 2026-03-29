@@ -1,1 +1,7 @@
 VITE_API_URL = "http://localhost:5000/api"
+VITE_OIDC_ISSUER = "https://ets.etechs.vn"
+VITE_OIDC_CLIENT_ID = "new-app-fe"
+VITE_OIDC_REDIRECT_URI = "http://localhost:3039/auth/callback"
+VITE_OIDC_POST_LOGOUT_REDIRECT_URI = "http://localhost:3039"
+VITE_OIDC_SCOPE = "openid profile email"
+VITE_OIDC_ENABLE_LOGOUT_REDIRECT = "true"
