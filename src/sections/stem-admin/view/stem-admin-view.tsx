@@ -1,16 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 
+import Tab from '@mui/material/Tab';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
-import List from '@mui/material/List';
 import Chip from '@mui/material/Chip';
+import Grid from '@mui/material/Grid';
+import Tabs from '@mui/material/Tabs';
 import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
 import Divider from '@mui/material/Divider';
-import ListItem from '@mui/material/ListItem';
 import TextField from '@mui/material/TextField';
+import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+import Pagination from '@mui/material/Pagination';
+import CloseIcon from '@mui/icons-material/Close';
+import CardContent from '@mui/material/CardContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import { useAuth } from 'src/contexts/AuthContext';
@@ -23,25 +33,47 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+const PAGE_SIZE = 12;
+
 const toAbsoluteUrl = (path?: string | null) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${API_URL}${path}`;
 };
 
+const truncate = (text: string | undefined | null, max = 110) => {
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+};
+
+const statusColor = (status: string): 'success' | 'error' | 'warning' => {
+  if (status === 'approved') return 'success';
+  if (status === 'rejected') return 'error';
+  return 'warning';
+};
+
 export function StemAdminView() {
   const { user } = useAuth();
 
+  const [activeTab, setActiveTab] = useState(0);
+
+  // ── Logs state ──
   const [loading, setLoading] = useState(false);
-  const [pendingLoading, setPendingLoading] = useState(false);
-  const [actionLoadingById, setActionLoadingById] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsPage, setLogsPage] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+
+  // ── Pending state ──
+  const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingError, setPendingError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
-  const [logs, setLogs] = useState<any[]>([]);
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [pendingKeyword, setPendingKeyword] = useState('');
+  const [pendingPage, setPendingPage] = useState(1);
+  const [selectedPending, setSelectedPending] = useState<any | null>(null);
+  const [actionLoadingById, setActionLoadingById] = useState<Record<string, boolean>>({});
   const [rejectReasonById, setRejectReasonById] = useState<Record<string, string>>({});
   const [approvalNoteById, setApprovalNoteById] = useState<Record<string, string>>({});
 
@@ -71,6 +103,7 @@ export function StemAdminView() {
         status: pendingStatusFilter === 'all' ? undefined : pendingStatusFilter,
       });
       setPendingItems(result.items || []);
+      setPendingPage(1);
     } catch (err: any) {
       setPendingError(err?.response?.data?.detail || err?.message || 'Không thể tải vùng chờ duyệt');
     } finally {
@@ -101,6 +134,7 @@ export function StemAdminView() {
       });
 
       setActionMessage(`Đã duyệt item ${itemId} và đồng bộ vào hệ tri thức.`);
+      setSelectedPending(null);
       await loadPendingItems();
       await loadLogs();
     } catch (err: any) {
@@ -124,6 +158,7 @@ export function StemAdminView() {
       });
 
       setActionMessage(`Đã từ chối item ${itemId}.`);
+      setSelectedPending(null);
       await loadPendingItems();
     } catch (err: any) {
       setPendingError(err?.response?.data?.detail || err?.message || `Không thể từ chối item ${itemId}`);
@@ -138,6 +173,7 @@ export function StemAdminView() {
 
   useEffect(() => {
     loadPendingItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingStatusFilter]);
 
   const filteredPendingItems = useMemo(() => {
@@ -172,8 +208,19 @@ export function StemAdminView() {
     });
   }, [pendingItems, pendingKeyword]);
 
+  const pendingPageCount = Math.max(1, Math.ceil(filteredPendingItems.length / PAGE_SIZE));
+  const pagedPendingItems = filteredPendingItems.slice((pendingPage - 1) * PAGE_SIZE, pendingPage * PAGE_SIZE);
+
+  const logsPageCount = Math.max(1, Math.ceil(logs.length / PAGE_SIZE));
+  const pagedLogs = logs.slice((logsPage - 1) * PAGE_SIZE, logsPage * PAGE_SIZE);
+
+  const pendingItemId = selectedPending?._id ?? '';
+  const pendingLoadingItem = Boolean(actionLoadingById[pendingItemId]);
+  const isPendingStatus = (selectedPending?.status || 'pending') === 'pending';
+
   return (
-    <Box sx={{ display: 'grid', gap: 3 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* ── Header ── */}
       <Card sx={{ p: 3 }}>
         <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
           <Typography variant="h5">Quản lý truy vấn STEM</Typography>
@@ -191,195 +238,471 @@ export function StemAdminView() {
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       </Card>
 
-      <Card sx={{ p: 3 }}>
-        <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          Vùng chờ học tri thức (Pending Learning)
-        </Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip
-              clickable
-              color={pendingStatusFilter === 'all' ? 'primary' : 'default'}
-              label="Tất cả"
-              onClick={() => setPendingStatusFilter('all')}
-            />
-            <Chip
-              clickable
-              color={pendingStatusFilter === 'pending' ? 'warning' : 'default'}
-              label="Pending"
-              onClick={() => setPendingStatusFilter('pending')}
-            />
-            <Chip
-              clickable
-              color={pendingStatusFilter === 'approved' ? 'success' : 'default'}
-              label="Approved"
-              onClick={() => setPendingStatusFilter('approved')}
-            />
-            <Chip
-              clickable
-              color={pendingStatusFilter === 'rejected' ? 'error' : 'default'}
-              label="Rejected"
-              onClick={() => setPendingStatusFilter('rejected')}
-            />
-          </Stack>
-          <TextField
-            size="small"
-            label="Tìm kiếm theo từ khóa"
-            placeholder="Ví dụ: ladybug, water cycle..."
-            value={pendingKeyword}
-            onChange={(e) => setPendingKeyword(e.target.value)}
-            fullWidth
-          />
-        </Stack>
-        <Divider sx={{ mb: 2 }} />
+      {/* ── Tab container ── */}
+      <Card>
+        <Tabs
+          value={activeTab}
+          onChange={(_, val) => setActiveTab(val)}
+          sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
+        >
+          <Tab label={`Vùng chờ duyệt (${filteredPendingItems.length})`} />
+          <Tab label={`Lịch sử truy vấn (${logs.length})`} />
+        </Tabs>
 
-        {filteredPendingItems.length === 0 && !pendingLoading && (
-          <Typography variant="body2">Không có dữ liệu phù hợp với bộ lọc hiện tại.</Typography>
+        {/* ── Tab 0: Vùng chờ duyệt ── */}
+        {activeTab === 0 && (
+          <Box sx={{ p: 3 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 3 }} alignItems={{ sm: 'center' }}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map((s) => (
+                  <Chip
+                    key={s}
+                    clickable
+                    color={pendingStatusFilter === s ? (s === 'all' ? 'primary' : statusColor(s)) : 'default'}
+                    label={{ all: 'Tất cả', pending: 'Pending', approved: 'Approved', rejected: 'Rejected' }[s]}
+                    onClick={() => { setPendingStatusFilter(s); setPendingPage(1); }}
+                  />
+                ))}
+              </Stack>
+              <TextField
+                size="small"
+                label="Tìm kiếm"
+                placeholder="ladybug, water cycle..."
+                value={pendingKeyword}
+                onChange={(e) => { setPendingKeyword(e.target.value); setPendingPage(1); }}
+                sx={{ minWidth: 220 }}
+              />
+            </Stack>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {pendingLoading && (
+              <Stack alignItems="center" sx={{ py: 6 }}>
+                <CircularProgress />
+              </Stack>
+            )}
+
+            {!pendingLoading && pagedPendingItems.length === 0 && (
+              <Alert severity="info">Không có dữ liệu phù hợp với bộ lọc hiện tại.</Alert>
+            )}
+
+            <Grid container spacing={2}>
+              {pagedPendingItems.map((item) => {
+                const modelOutput = item?.model_output || {};
+                const topCategory = modelOutput?.category_candidates?.[0]?.category_name;
+                const status = item?.status || 'pending';
+
+                return (
+                  <Grid key={item._id} size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        transition: 'all 0.18s',
+                        '&:hover': { borderColor: 'primary.main', boxShadow: 3 },
+                      }}
+                    >
+                      <CardActionArea
+                        onClick={() => setSelectedPending(item)}
+                        sx={{ flexGrow: 1, display: 'flex', alignItems: 'flex-start' }}
+                      >
+                        <CardContent sx={{ width: '100%' }}>
+                          <Stack spacing={1.5}>
+                            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                              <Chip size="small" color={statusColor(status)} label={status} />
+                              <Typography variant="caption" color="text.secondary">
+                                {item.query_type?.toUpperCase() || 'TEXT'}
+                              </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.5 }}>
+                              {truncate(item.query_text || item.normalized_query_text)}
+                            </Typography>
+
+                            {topCategory && (
+                              <Typography variant="caption" color="primary.main">
+                                📁 {topCategory}
+                              </Typography>
+                            )}
+
+                            {item.reason && (
+                              <Typography variant="caption" color="text.secondary">
+                                {truncate(item.reason, 80)}
+                              </Typography>
+                            )}
+
+                            <Typography variant="caption" color="text.disabled">
+                              {item.created_at || item.updated_at || ''}
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+
+            {pendingPageCount > 1 && (
+              <Stack alignItems="center" sx={{ mt: 3 }}>
+                <Pagination
+                  count={pendingPageCount}
+                  page={pendingPage}
+                  onChange={(_, p) => setPendingPage(p)}
+                  color="primary"
+                />
+              </Stack>
+            )}
+          </Box>
         )}
 
-        <List>
-          {filteredPendingItems.map((item) => {
-            const itemId = item._id;
-            const loadingItem = Boolean(actionLoadingById[itemId]);
-            const isPending = (item?.status || 'pending') === 'pending';
-            const modelOutput = item?.model_output || {};
-            const topCategory = modelOutput?.category_candidates?.[0]?.category_name;
-            const subjectHints = (modelOutput?.subject_candidates || [])
-              .map((s: any) => s?.subject_name)
-              .filter(Boolean)
-              .slice(0, 5);
+        {/* ── Tab 1: Lịch sử truy vấn ── */}
+        {activeTab === 1 && (
+          <Box sx={{ p: 3 }}>
+            {loading && (
+              <Stack alignItems="center" sx={{ py: 6 }}>
+                <CircularProgress />
+              </Stack>
+            )}
 
-            return (
-              <ListItem key={itemId} alignItems="flex-start" sx={{ mb: 2, display: 'block', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2 }}>
-                <Stack spacing={1.5}>
-                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                    <Typography variant="subtitle2">{item.query_type?.toUpperCase() || 'TEXT'} • {item.created_at || item.updated_at || 'N/A'}</Typography>
-                    <Chip
-                      size="small"
-                      color={
-                        item.status === 'approved'
-                          ? 'success'
-                          : item.status === 'rejected'
-                            ? 'error'
-                            : 'warning'
-                      }
-                      label={item.status || 'pending'}
-                    />
-                  </Stack>
+            {!loading && logs.length === 0 && (
+              <Alert severity="info">Chưa có dữ liệu truy vấn.</Alert>
+            )}
 
-                  {item.query_text && <Typography variant="body2"><strong>Input:</strong> {item.query_text}</Typography>}
-                  {item.normalized_query_text && <Typography variant="body2"><strong>Normalized:</strong> {item.normalized_query_text}</Typography>}
-                  {item.reason && <Typography variant="body2" color="text.secondary">{item.reason}</Typography>}
+            <Grid container spacing={2}>
+              {pagedLogs.map((log) => (
+                <Grid key={log._id} size={{ xs: 12, sm: 6, md: 4 }}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transition: 'all 0.18s',
+                      '&:hover': { borderColor: 'primary.main', boxShadow: 3 },
+                    }}
+                  >
+                    <CardActionArea
+                      onClick={() => setSelectedLog(log)}
+                      sx={{ flexGrow: 1, display: 'flex', alignItems: 'flex-start' }}
+                    >
+                      <CardContent sx={{ width: '100%' }}>
+                        <Stack spacing={1.5}>
+                          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                            <Chip size="small" variant="outlined" label={log.type?.toUpperCase() || 'QUERY'} />
+                            {log.triples?.length > 0 && (
+                              <Chip size="small" color="primary" label={`${log.triples.length} triples`} />
+                            )}
+                          </Stack>
 
-                  {!!topCategory && (
-                    <Typography variant="body2"><strong>Category gợi ý:</strong> {topCategory}</Typography>
-                  )}
-                  {!!subjectHints.length && (
-                    <Typography variant="body2"><strong>Subject gợi ý:</strong> {subjectHints.join(', ')}</Typography>
-                  )}
+                          {log.query_text && (
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {truncate(log.query_text)}
+                            </Typography>
+                          )}
 
-                  {item.image_url && (
+                          {log.image_url && (
+                            <Box
+                              component="img"
+                              src={toAbsoluteUrl(log.image_url)}
+                              alt={log._id}
+                              sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 1 }}
+                            />
+                          )}
+
+                          <Typography variant="caption" color="text.disabled">
+                            {log.created_at || log.timestamp || ''}
+                          </Typography>
+                        </Stack>
+                      </CardContent>
+                    </CardActionArea>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {logsPageCount > 1 && (
+              <Stack alignItems="center" sx={{ mt: 3 }}>
+                <Pagination
+                  count={logsPageCount}
+                  page={logsPage}
+                  onChange={(_, p) => setLogsPage(p)}
+                  color="primary"
+                />
+              </Stack>
+            )}
+          </Box>
+        )}
+      </Card>
+
+      {/* ── Modal: Pending Item Detail ── */}
+      <Dialog
+        open={Boolean(selectedPending)}
+        onClose={() => setSelectedPending(null)}
+        fullWidth
+        maxWidth="md"
+        scroll="paper"
+      >
+        {selectedPending && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="h6">Chi tiết item</Typography>
+                  <Chip
+                    size="small"
+                    color={statusColor(selectedPending?.status || 'pending')}
+                    label={selectedPending?.status || 'pending'}
+                  />
+                </Stack>
+                <IconButton onClick={() => setSelectedPending(null)} size="small">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={2.5}>
+                <Stack direction="row" spacing={3}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" color="text.secondary">ID</Typography>
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{pendingItemId}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Loại</Typography>
+                    <Typography variant="body2">{selectedPending.query_type?.toUpperCase() || 'TEXT'}</Typography>
+                  </Box>
+                </Stack>
+
+                {selectedPending.query_text && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Input</Typography>
+                    <Typography variant="body2">{selectedPending.query_text}</Typography>
+                  </Box>
+                )}
+
+                {selectedPending.normalized_query_text && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Normalized</Typography>
+                    <Typography variant="body2">{selectedPending.normalized_query_text}</Typography>
+                  </Box>
+                )}
+
+                {selectedPending.reason && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Lý do thêm vào pending</Typography>
+                    <Typography variant="body2">{selectedPending.reason}</Typography>
+                  </Box>
+                )}
+
+                {selectedPending.image_url && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Hình ảnh</Typography>
                     <Box
                       component="img"
-                      src={toAbsoluteUrl(item.image_url)}
-                      alt={itemId}
-                      sx={{ width: 240, borderRadius: 1, border: '1px solid #eee' }}
+                      src={toAbsoluteUrl(selectedPending.image_url)}
+                      alt={pendingItemId}
+                      sx={{
+                        mt: 0.5,
+                        width: '100%',
+                        maxHeight: 280,
+                        objectFit: 'contain',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                      }}
                     />
-                  )}
-
-                  {isPending ? (
-                    <>
-                      <TextField
-                        size="small"
-                        label="Ghi chú duyệt (optional)"
-                        value={approvalNoteById[itemId] || ''}
-                        onChange={(e) => setApprovalNoteById((prev) => ({ ...prev, [itemId]: e.target.value }))}
-                        disabled={loadingItem}
-                        fullWidth
-                      />
-                      <TextField
-                        size="small"
-                        label="Lý do từ chối (optional)"
-                        value={rejectReasonById[itemId] || ''}
-                        onChange={(e) => setRejectReasonById((prev) => ({ ...prev, [itemId]: e.target.value }))}
-                        disabled={loadingItem}
-                        fullWidth
-                      />
-
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          variant="contained"
-                          color="success"
-                          onClick={() => handleApprove(item)}
-                          disabled={loadingItem}
-                        >
-                          {loadingItem ? <CircularProgress size={18} color="inherit" /> : 'Duyệt & Đồng bộ'}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          onClick={() => handleReject(item)}
-                          disabled={loadingItem}
-                        >
-                          {loadingItem ? <CircularProgress size={18} color="inherit" /> : 'Từ chối'}
-                        </Button>
-                      </Stack>
-                    </>
-                  ) : (
-                    <Typography variant="caption" color="text.secondary">
-                      Item này đã được xử lý, chỉ hiển thị để tra cứu.
-                    </Typography>
-                  )}
-                </Stack>
-              </ListItem>
-            );
-          })}
-        </List>
-      </Card>
-
-      <Card sx={{ p: 3 }}>
-        <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          Lịch sử truy vấn
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-
-        {logs.length === 0 && !loading && (
-          <Typography variant="body2">Chưa có dữ liệu truy vấn.</Typography>
-        )}
-
-        <List>
-          {logs.map((log) => (
-            <ListItem key={log._id} alignItems="flex-start" sx={{ mb: 2, display: 'block' }}>
-              <Stack spacing={1}>
-                <Typography variant="subtitle2">
-                  {log.type?.toUpperCase()} • {log.created_at || log.timestamp}
-                </Typography>
-                {log.query_text && (
-                  <Typography variant="body2">Text: {log.query_text}</Typography>
+                  </Box>
                 )}
-                {log.image_url && (
-                  <Box
-                    component="img"
-                    src={toAbsoluteUrl(log.image_url)}
-                    alt={log._id}
-                    sx={{ width: 240, borderRadius: 1, border: '1px solid #eee' }}
-                  />
+
+                {(selectedPending?.model_output?.category_candidates || []).length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Category gợi ý</Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      {(selectedPending?.model_output?.category_candidates || []).map((c: any, i: number) => (
+                        <Chip
+                          key={i}
+                          size="small"
+                          color={i === 0 ? 'primary' : 'default'}
+                          label={`${c.category_name}${c.confidence ? ` (${(c.confidence * 100).toFixed(0)}%)` : ''}`}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
                 )}
-                {log.triples?.length > 0 && (
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    {log.triples.map((t: any, idx: number) => (
-                      <Chip key={`${log._id}-${idx}`} label={`${t.subject} ${t.relationship} ${t.object}`} sx={{ mb: 1 }} />
-                    ))}
-                  </Stack>
+
+                {(selectedPending?.model_output?.subject_candidates || []).length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Subject gợi ý</Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      {(selectedPending?.model_output?.subject_candidates || []).slice(0, 8).map((s: any, i: number) => (
+                        <Chip
+                          key={i}
+                          size="small"
+                          label={`${s.subject_name}${s.confidence ? ` (${(s.confidence * 100).toFixed(0)}%)` : ''}`}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
                 )}
-                {log.user_id && (
-                  <Typography variant="caption">User ID: {log.user_id}</Typography>
+
+                {selectedPending.created_at && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Thời gian tạo</Typography>
+                    <Typography variant="body2">{selectedPending.created_at}</Typography>
+                  </Box>
+                )}
+
+                {isPendingStatus && (
+                  <>
+                    <Divider />
+                    <TextField
+                      size="small"
+                      label="Ghi chú duyệt (optional)"
+                      value={approvalNoteById[pendingItemId] || ''}
+                      onChange={(e) => setApprovalNoteById((prev) => ({ ...prev, [pendingItemId]: e.target.value }))}
+                      disabled={pendingLoadingItem}
+                      fullWidth
+                    />
+                    <TextField
+                      size="small"
+                      label="Lý do từ chối (optional)"
+                      value={rejectReasonById[pendingItemId] || ''}
+                      onChange={(e) => setRejectReasonById((prev) => ({ ...prev, [pendingItemId]: e.target.value }))}
+                      disabled={pendingLoadingItem}
+                      fullWidth
+                    />
+                  </>
                 )}
               </Stack>
-            </ListItem>
-          ))}
-        </List>
-      </Card>
+            </DialogContent>
+
+            {isPendingStatus ? (
+              <DialogActions sx={{ px: 3, py: 2 }}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => handleReject(selectedPending)}
+                  disabled={pendingLoadingItem}
+                >
+                  {pendingLoadingItem ? <CircularProgress size={18} color="inherit" /> : 'Từ chối'}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => handleApprove(selectedPending)}
+                  disabled={pendingLoadingItem}
+                >
+                  {pendingLoadingItem ? <CircularProgress size={18} color="inherit" /> : 'Duyệt & Đồng bộ'}
+                </Button>
+              </DialogActions>
+            ) : (
+              <DialogActions sx={{ px: 3, py: 2 }}>
+                <Button onClick={() => setSelectedPending(null)}>Đóng</Button>
+              </DialogActions>
+            )}
+          </>
+        )}
+      </Dialog>
+
+      {/* ── Modal: Log Detail ── */}
+      <Dialog
+        open={Boolean(selectedLog)}
+        onClose={() => setSelectedLog(null)}
+        fullWidth
+        maxWidth="md"
+        scroll="paper"
+      >
+        {selectedLog && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="h6">Chi tiết log</Typography>
+                  <Chip size="small" variant="outlined" label={selectedLog.type?.toUpperCase() || 'QUERY'} />
+                </Stack>
+                <IconButton onClick={() => setSelectedLog(null)} size="small">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={2.5}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">ID</Typography>
+                  <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{selectedLog._id}</Typography>
+                </Box>
+
+                {(selectedLog.created_at || selectedLog.timestamp) && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Thời gian</Typography>
+                    <Typography variant="body2">{selectedLog.created_at || selectedLog.timestamp}</Typography>
+                  </Box>
+                )}
+
+                {selectedLog.query_text && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Nội dung truy vấn</Typography>
+                    <Typography variant="body2">{selectedLog.query_text}</Typography>
+                  </Box>
+                )}
+
+                {selectedLog.image_url && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Hình ảnh</Typography>
+                    <Box
+                      component="img"
+                      src={toAbsoluteUrl(selectedLog.image_url)}
+                      alt={selectedLog._id}
+                      sx={{
+                        mt: 0.5,
+                        width: '100%',
+                        maxHeight: 300,
+                        objectFit: 'contain',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    />
+                  </Box>
+                )}
+
+                {selectedLog.triples?.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Kết quả triples ({selectedLog.triples.length})
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      {selectedLog.triples.map((t: any, idx: number) => (
+                        <Chip
+                          key={idx}
+                          size="small"
+                          label={`${t.subject} ${t.relationship} ${t.object}`}
+                          sx={{ mb: 0.5 }}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {selectedLog.user_id && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">User ID</Typography>
+                    <Typography variant="body2">{selectedLog.user_id}</Typography>
+                  </Box>
+                )}
+              </Stack>
+            </DialogContent>
+
+            <DialogActions sx={{ px: 3, py: 2 }}>
+              <Button onClick={() => setSelectedLog(null)}>Đóng</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }

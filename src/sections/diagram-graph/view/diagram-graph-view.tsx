@@ -160,6 +160,9 @@ export function DiagramGraphView() {
   const [diagramImageOpen, setDiagramImageOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const zoomPanRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
+  zoomPanRef.current = { zoom, pan };
   const nodeColorByType = nodeColorByTypeLight;
   const edgeColor = '#94A3B8';
   const edgeLabelColor = '#475569';
@@ -282,14 +285,10 @@ export function DiagramGraphView() {
   useEffect(() => {
     const handleBrowserZoomConflict = (event: WheelEvent) => {
       if (!graphModalOpen) return;
-      if (!event.ctrlKey) return;
       const target = event.target as Node | null;
       if (!target) return;
       if (!graphCanvasRef.current?.contains(target)) return;
-
-      if (event.cancelable) {
-        event.preventDefault();
-      }
+      if (event.cancelable) event.preventDefault();
     };
 
     document.addEventListener('wheel', handleBrowserZoomConflict, { passive: false, capture: true });
@@ -298,11 +297,44 @@ export function DiagramGraphView() {
     };
   }, [graphModalOpen]);
 
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return undefined;
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const { zoom: currentZoom, pan: currentPan } = zoomPanRef.current;
+      const zoomFactor = event.deltaY < 0 ? 1.12 : 0.9;
+      const newZoom = clamp(currentZoom * zoomFactor, 0.35, 2.8);
+      const rect = svgEl.getBoundingClientRect();
+      const scaleX = GRAPH_WIDTH / rect.width;
+      const scaleY = GRAPH_HEIGHT / rect.height;
+      const svgOffsetX = (event.clientX - rect.left) * scaleX;
+      const svgOffsetY = (event.clientY - rect.top) * scaleY;
+      const worldPoint = toGraphPoint(svgOffsetX, svgOffsetY, currentPan, currentZoom);
+      const newPan = {
+        x: svgOffsetX - worldPoint.x * newZoom,
+        y: svgOffsetY - worldPoint.y * newZoom,
+      };
+      setZoom(newZoom);
+      setPan(newPan);
+    };
+
+    svgEl.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => svgEl.removeEventListener('wheel', handleNativeWheel);
+  }, [graphData]);
+
   const positionedNodeMap = useMemo(() => {
     const map = new Map<string, Point>();
     Object.entries(positions).forEach(([nodeId, point]) => map.set(nodeId, point));
     return map;
   }, [positions]);
+
+  const nodeTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    positionedNodes.forEach((node) => map.set(node.id, node.type));
+    return map;
+  }, [positionedNodes]);
 
   const handleCloseModal = () => {
     setGraphModalOpen(false);
@@ -318,33 +350,6 @@ export function DiagramGraphView() {
     event?.stopPropagation();
     if (!selectedDiagram?.path_pdf) return;
     window.open(selectedDiagram.path_pdf, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
-    if (!event.ctrlKey) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const zoomFactor = event.deltaY < 0 ? 1.12 : 0.9;
-    const newZoom = clamp(zoom * zoomFactor, 0.35, 2.8);
-
-    const worldPoint = toGraphPoint(event.nativeEvent.offsetX, event.nativeEvent.offsetY, pan, zoom);
-    const newPan = {
-      x: event.nativeEvent.offsetX - worldPoint.x * newZoom,
-      y: event.nativeEvent.offsetY - worldPoint.y * newZoom,
-    };
-
-    setZoom(newZoom);
-    setPan(newPan);
-  };
-
-  const handleWheelCapture = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-    event.stopPropagation();
   };
 
   const handleSvgMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
@@ -573,7 +578,7 @@ export function DiagramGraphView() {
             <Chip size="small" label={`Zoom: ${zoom.toFixed(2)}x`} variant="outlined" />
             <Chip size="small" label="Kéo node để di chuyển" variant="outlined" />
             <Chip size="small" label="Kéo nền để pan" variant="outlined" />
-            <Chip size="small" label="Giữ Ctrl + lăn chuột để zoom" variant="outlined" />
+            <Chip size="small" label="Lăn chuột để zoom" variant="outlined" />
           </Stack>
         </DialogTitle>
 
@@ -648,10 +653,10 @@ export function DiagramGraphView() {
           {graphData && (
             <Box
               ref={graphCanvasRef}
-              onWheelCapture={handleWheelCapture}
               sx={{ width: '100%', overflow: 'hidden', border: '1px solid', borderColor: canvasBorder, borderRadius: 1.5, height: 760 }}
             >
               <svg
+                ref={svgRef}
                 width="100%"
                 height="100%"
                 viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
@@ -659,27 +664,74 @@ export function DiagramGraphView() {
                 onMouseMove={handleSvgMouseMove}
                 onMouseUp={handleSvgMouseUp}
                 onMouseLeave={handleSvgMouseUp}
-                onWheel={handleWheel}
                 style={{ cursor: draggingNodeId ? 'grabbing' : isPanning ? 'grabbing' : 'grab', background: canvasBackground }}
               >
+                <defs>
+                  <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill={edgeColor} />
+                  </marker>
+                </defs>
                 <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
                   {graphData.graph.edges.map((edge) => {
                     const source = positionedNodeMap.get(edge.from);
                     const target = positionedNodeMap.get(edge.to);
                     if (!source || !target) return null;
 
+                    const dx = target.x - source.x;
+                    const dy = target.y - source.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const sourceR = nodeTypeMap.get(edge.from) === 'diagram' ? 38 : 28;
+                    const targetR = nodeTypeMap.get(edge.to) === 'diagram' ? 38 : 28;
+                    const startX = source.x + (sourceR + 2) * (dx / dist);
+                    const startY = source.y + (sourceR + 2) * (dy / dist);
+                    const endX = target.x - (targetR + 10) * (dx / dist);
+                    const endY = target.y - (targetR + 10) * (dy / dist);
+                    const mx = (startX + endX) / 2;
+                    const my = (startY + endY) / 2;
+                    const curvature = 28;
+                    const cpx = mx - (dy / dist) * curvature;
+                    const cpy = my + (dx / dist) * curvature;
+                    const labelX = (startX + 2 * cpx + endX) / 4;
+                    const labelY = (startY + 2 * cpy + endY) / 4;
+                    const labelW = (edge.label?.length || 0) * 5.8 + 14;
+
                     return (
                       <g key={edge.id}>
-                        <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} stroke={edgeColor} strokeWidth={1.5} />
-                        <text
-                          x={(source.x + target.x) / 2}
-                          y={(source.y + target.y) / 2 - 6}
-                          fontSize="10"
-                          fill={edgeLabelColor}
-                          textAnchor="middle"
-                        >
-                          {edge.label}
-                        </text>
+                        <path
+                          d={`M ${startX} ${startY} Q ${cpx} ${cpy} ${endX} ${endY}`}
+                          stroke={edgeColor}
+                          strokeWidth={1.8}
+                          fill="none"
+                          markerEnd="url(#arrowhead)"
+                          strokeLinecap="round"
+                          opacity={0.72}
+                        />
+                        {edge.label && (
+                          <>
+                            <rect
+                              x={labelX - labelW / 2}
+                              y={labelY - 8}
+                              width={labelW}
+                              height={15}
+                              rx={5}
+                              fill="white"
+                              opacity={0.88}
+                              stroke={edgeColor}
+                              strokeWidth={0.5}
+                            />
+                            <text
+                              x={labelX}
+                              y={labelY + 3}
+                              fontSize="9"
+                              fill={edgeLabelColor}
+                              textAnchor="middle"
+                              fontFamily="Inter, system-ui, sans-serif"
+                              fontWeight="600"
+                            >
+                              {edge.label}
+                            </text>
+                          </>
+                        )}
                       </g>
                     );
                   })}
@@ -688,37 +740,61 @@ export function DiagramGraphView() {
                     const point = positionedNodeMap.get(node.id);
                     if (!point) return null;
 
-                    const radius = node.type === 'diagram' ? 36 : 26;
+                    const isDiagram = node.type === 'diagram';
+                    const radius = isDiagram ? 38 : 28;
+                    const nodeColor = nodeColorByType[node.type] || '#64748B';
                     const label = node.label.length > 14 ? `${node.label.slice(0, 14)}...` : node.label;
 
                     return (
-                      <g key={node.id}>
+                      <g
+                        key={node.id}
+                        style={{ filter: 'drop-shadow(0 3px 7px rgba(0,0,0,0.22))', cursor: 'grab' }}
+                        onMouseDown={(event) => {
+                          event.stopPropagation();
+                          const graphPoint = toGraphPoint(event.nativeEvent.offsetX, event.nativeEvent.offsetY, pan, zoom);
+                          setDraggingNodeId(node.id);
+                          setDragLastPoint(graphPoint);
+                        }}
+                      >
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r={radius + 6}
+                          fill={nodeColor}
+                          opacity={0.16}
+                          pointerEvents="none"
+                        />
                         <circle
                           cx={point.x}
                           cy={point.y}
                           r={radius}
-                          fill={nodeColorByType[node.type] || '#64748B'}
-                          opacity={0.95}
-                          onMouseDown={(event) => handleNodeMouseDown(node.id, event)}
+                          fill={nodeColor}
+                          stroke="rgba(255,255,255,0.85)"
+                          strokeWidth={2.5}
+                          opacity={0.96}
                         />
                         <text
                           x={point.x}
-                          y={point.y - 3}
-                          fontSize="10"
-                          fill="#fff"
+                          y={point.y - 5}
+                          fontSize={isDiagram ? '10' : '9'}
+                          fill="rgba(255,255,255,0.75)"
                           textAnchor="middle"
                           pointerEvents="none"
-                          style={{ fontWeight: 600 }}
+                          fontFamily="Inter, system-ui, sans-serif"
+                          fontWeight="600"
+                          letterSpacing="0.4"
                         >
                           {node.type}
                         </text>
                         <text
                           x={point.x}
                           y={point.y + 11}
-                          fontSize="10"
-                          fill="#fff"
+                          fontSize={isDiagram ? '11' : '10'}
+                          fill="white"
                           textAnchor="middle"
                           pointerEvents="none"
+                          fontFamily="Inter, system-ui, sans-serif"
+                          fontWeight="700"
                         >
                           {label}
                         </text>
