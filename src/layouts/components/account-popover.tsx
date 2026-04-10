@@ -15,6 +15,7 @@ import MenuItem, { menuItemClasses } from '@mui/material/MenuItem';
 import { useRouter, usePathname } from 'src/routes/hooks';
 
 import { useAuth } from 'src/contexts/AuthContext';
+import { buildSsoLogoutUrl } from 'src/services/oidcService';
 
 // ----------------------------------------------------------------------
 
@@ -72,6 +73,10 @@ export function AccountPopover({
     handleClosePopover();
     try {
       await logout();
+      if (import.meta.env.VITE_OIDC_ENABLE_LOGOUT_REDIRECT === 'true') {
+        window.location.assign(buildSsoLogoutUrl());
+        return;
+      }
       router.push('/');
     } catch (error) {
       console.error('Lỗi đăng xuất:', error);

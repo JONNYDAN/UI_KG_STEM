@@ -59,30 +59,50 @@ export type DiagramKnowledgeGraphResponse = {
 };
 
 export const getRootCategories = async () => {
-  const response = await api.get('/postgres/root-categories/');
+  const response = await api.get('/entities/root-categories');
   return response.data as RootCategory[];
 };
 
 export const getCategoriesByRoot = async (rootCategoryId: string) => {
-  const response = await api.get(`/postgres/categories/root/${rootCategoryId}`);
-  return response.data as Category[];
+  const response = await api.get('/entities/categories');
+  const categories = response.data as Category[];
+
+  return categories.filter((item) => item.root_category_id === rootCategoryId);
 };
 
 export const getDiagramsByCategory = async (categoryId: number) => {
-  const response = await api.get(`/postgres/diagrams/category/${categoryId}`);
-  return response.data as Diagram[];
+  const response = await api.get('/entities/diagrams');
+  const diagrams = response.data as Diagram[];
+
+  return diagrams.filter((item) => Number(item.category_id) === Number(categoryId));
 };
 
 export const getKnowledgeGraphByDiagram = async (payload: {
   diagramId: string;
   rootCategoryId: string;
   categoryName?: string;
+  categoryId?: number;
 }) => {
-  const response = await api.get(`/neo4j/graph/diagram/${payload.diagramId}`, {
-    params: {
-      root_category_id: payload.rootCategoryId,
-      category_name: payload.categoryName,
-    },
-  });
-  return response.data as DiagramKnowledgeGraphResponse;
+  try {
+    const response = await api.get(`/neo4j/graph/diagram/${payload.diagramId}`, {
+      params: {
+        root_category_id: payload.rootCategoryId,
+        category_name: payload.categoryName,
+      },
+    });
+    return response.data as DiagramKnowledgeGraphResponse;
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      const fallbackResponse = await api.get(`/postgres/knowledge-graph/diagram/${payload.diagramId}`, {
+        params: {
+          root_category_id: payload.rootCategoryId,
+          category_id: payload.categoryId,
+        },
+      });
+
+      return fallbackResponse.data as DiagramKnowledgeGraphResponse;
+    }
+
+    throw error;
+  }
 };

@@ -1,0 +1,8 @@
+window.__ENV__ = {
+  VITE_API_URL: 'https://api.etechs.vn/api',
+  VITE_API_BASE_URL: 'https://api.etechs.vn/api',
+  VITE_OIDC_ISSUER: 'https://api.etechs.vn',
+  VITE_OIDC_CLIENT_ID: 'eds-fe',
+  VITE_OIDC_REDIRECT_URI: 'https://eds.etechs.vn/auth/callback',
+  VITE_OIDC_POST_LOGOUT_REDIRECT_URI: 'https://eds.etechs.vn',
+};

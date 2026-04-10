@@ -29,7 +29,7 @@ export function Logo({
   const singleLogo = (
     <img 
       src="/logo.png" 
-      alt="Logo_HCMUE" 
+      alt="Etechs EDS" 
       style={{ width: '100%', height: '100%' }}
     />
   );
@@ -37,7 +37,7 @@ export function Logo({
   const fullLogo = (
     <img 
       src="/logo.png" 
-      alt="Logo_HCMUE" 
+      alt="Etechs EDS" 
       style={{ width: '100%', height: '100%' }}
     />
   );

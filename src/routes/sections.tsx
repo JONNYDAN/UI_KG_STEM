@@ -15,6 +15,8 @@ import { ProtectedRoute } from 'src/components/ProtectedRoute';
 // Pages - Only essential pages for STEM query system
 export const SignInPage = lazy(() => import('src/pages/sign-in'));
 export const SignUpPage = lazy(() => import('src/pages/sign-up'));
+export const AuthCallbackPage = lazy(() => import('src/pages/auth-callback'));
+export const AuthBootstrapPage = lazy(() => import('src/pages/auth-bootstrap'));
 export const StemQueryPage = lazy(() => import('src/pages/stem-query'));
 export const StemAdminPage = lazy(() => import('src/pages/stem-admin'));
 export const EntityManagementPage = lazy(() => import('src/pages/entity-management'));
@@ -54,14 +56,10 @@ export const routesSection: RouteObject[] = [
       </Suspense>
     ),
     children: [
-      // Default home route - STEM Query
+      // Default home route - auth bootstrap
       {
         index: true,
-        element: (
-          <ProtectedRoute>
-            <StemQueryPage />
-          </ProtectedRoute>
-        ),
+        element: <AuthBootstrapPage />,
       },
       // STEM Query - User Interface
       {
@@ -126,6 +124,16 @@ export const routesSection: RouteObject[] = [
       <Suspense fallback={renderFallback()}>
         <AuthLayout>
           <SignUpPage />
+        </AuthLayout>
+      </Suspense>
+    ),
+  },
+  {
+    path: 'auth/callback',
+    element: (
+      <Suspense fallback={renderFallback()}>
+        <AuthLayout>
+          <AuthCallbackPage />
         </AuthLayout>
       </Suspense>
     ),

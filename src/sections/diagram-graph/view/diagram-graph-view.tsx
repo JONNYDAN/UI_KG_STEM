@@ -252,6 +252,7 @@ export function DiagramGraphView() {
         diagramId: diagram.id,
         rootCategoryId: selectedRootId,
         categoryName: selectedCategory?.name,
+        categoryId: selectedCategory?.id,
       });
       setGraphData(graph);
       setZoom(1);

@@ -6,43 +6,43 @@ import Link from '@mui/material/Link';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
-import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
-import InputAdornment from '@mui/material/InputAdornment';
 
 import { useRouter } from 'src/routes/hooks';
 
 import { useAuth } from 'src/contexts/AuthContext';
-
-import { Iconify } from 'src/components/iconify';
-
-import { loginAPI } from '../../services/authService';
+import { buildOidcAuthorizeUrl, loginViaOidcMiddleware } from 'src/services/oidcService';
 
 // ----------------------------------------------------------------------
 
 export function SignInView() {
-  const { login, isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const router = useRouter();
   const location = useLocation();
 
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [formData, setFormData] = useState({
-    username: '', 
-    password: '',
-  });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Determine where to redirect after login. ProtectedRoute stores attempted location in
   // location.state.from. It might be a Location object or a string.
   const fromState = (location.state as any)?.from;
+  const query = new URLSearchParams(location.search);
+  const fromQuery = query.get('from');
   const redirectTo =
     typeof fromState === 'string'
       ? fromState
       : fromState
-      ? `${fromState.pathname || '/tutorial'}${fromState.search || ''}`
-      : null;
+      ? `${fromState.pathname || '/stem/query'}${fromState.search || ''}`
+      : fromQuery || null;
+
+  const oidcErrorDescription =
+    (location.state as any)?.oidcErrorDescription ||
+    query.get('oidcErrorDescription') ||
+    query.get('bootstrapError') ||
+    '';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -51,135 +51,53 @@ export function SignInView() {
     }
   }, [isAuthenticated, router, redirectTo, user?.role]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError(''); // Xóa lỗi khi người dùng bắt đầu nhập
-  };
-
-  const handleSignIn = async () => {
+  const handleSignIn = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      // Validate form
-      if (!formData.username || !formData.password) {
-        setError('Vui lòng nhập tên đăng nhập và mật khẩu');
-        return;
-      }
-
-      const result = await loginAPI(formData);
-      
-      // Kiểm tra cấu trúc response và điều chỉnh cho phù hợp
-      if (result.success && result.data) {
-        // Gọi hàm login từ AuthContext với đúng cấu trúc
-        login(result.data.user, result.data.token);
-        const isAdmin = ['admin', 'ADMIN'].includes(result.data.user?.role || '');
-        router.push(redirectTo || (isAdmin ? '/stem/admin' : '/stem/query'));
-      } else {
-        setError(result.message || 'Đăng nhập thất bại');
-      }
-      
+      const authUrl = await buildOidcAuthorizeUrl(redirectTo || '/stem/query');
+      window.location.assign(authUrl);
     } catch (err: any) {
-      console.error("Lỗi đăng nhập", err);
-      setError(err.message || 'Tên đăng nhập hoặc mật khẩu không đúng');
+      console.error('Lỗi bắt đầu đăng nhập SSO', err);
+      setError(err.message || 'Không thể bắt đầu đăng nhập SSO');
     } finally {
       setLoading(false);
     }
-  };
+  }, [redirectTo]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSignIn();
-    }
-  };
+  const handleFormSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
 
-  const renderForm = (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'flex-end',
-        flexDirection: 'column',
-      }}
-    >
-      <TextField
-        fullWidth
-        name="username" // Đổi từ email sang username
-        label="Tên đăng nhập"
-        sx={{ mb: 3 }}
-        slotProps={{
-          inputLabel: { shrink: true },
-        }}
-        value={formData.username}
-        onChange={handleChange}
-        onKeyPress={handleKeyPress}
-        disabled={loading}
-      />
+      if (!email || !password) {
+        setError('Vui lòng nhập email và mật khẩu.');
+        return;
+      }
 
-      {/* <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Link variant="body2" color="inherit">
-          Quên mật khẩu?
-        </Link>
-      </Box> */}
+      try {
+        setFormLoading(true);
+        setError('');
 
-      <TextField
-        fullWidth
-        name="password"
-        label="Mật khẩu"
-        type={showPassword ? 'text' : 'password'}
-        slotProps={{
-          inputLabel: { shrink: true },
-          input: {
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton 
-                  onClick={() => setShowPassword(!showPassword)} 
-                  edge="end"
-                  disabled={loading}
-                >
-                  <Iconify icon={showPassword ? 'solar:eye-bold' : 'solar:eye-closed-bold'} />
-                </IconButton>
-              </InputAdornment>
-            ),
-          },
-        }}
-        sx={{ mb: 3 }}
-        value={formData.password}
-        onChange={handleChange}
-        onKeyPress={handleKeyPress}
-        disabled={loading}
-      />
+        const response = await loginViaOidcMiddleware({
+          email: email.trim(),
+          password,
+          redirectAfterLogin: redirectTo || '/stem/query',
+        });
 
-      {/* Hiển thị lỗi */}
-      {error && (
-        <Typography 
-          color="error" 
-          variant="body2" 
-          sx={{ 
-            mb: 2, 
-            width: '100%',
-            textAlign: 'center'
-          }}
-        >
-          {error}
-        </Typography>
-      )}
+        if (!response.redirect_url) {
+          throw new Error('Middleware không trả về redirect_url để hoàn tất OIDC.');
+        }
 
-      <Button
-        fullWidth
-        size="large"
-        type="submit"
-        color="inherit"
-        variant="contained"
-        onClick={handleSignIn}
-        disabled={loading}
-        sx={{ mb: 2 }}
-      >
-        {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-      </Button>
-    </Box>
+        window.location.assign(response.redirect_url);
+      } catch (submitError: any) {
+        console.error('Lỗi đăng nhập middleware', submitError);
+        setError(submitError?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+      } finally {
+        setFormLoading(false);
+      }
+    },
+    [email, password, redirectTo]
   );
 
   return (
@@ -194,16 +112,103 @@ export function SignInView() {
         }}
       >
         <Typography variant="h5">Đăng nhập</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', maxWidth: 320 }}>
+          Truy cập hệ thống Etechs EDS bằng tài khoản SSO dùng chung của Etechs.
+        </Typography>
       </Box>
       
-      {renderForm}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          flexDirection: 'column',
+          width: '100%',
+        }}
+      >
+        {error && (
+          <Typography
+            color="error"
+            variant="body2"
+            sx={{
+              mb: 2,
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </Typography>
+        )}
+
+        {!error && oidcErrorDescription && (
+          <Typography
+            color="warning.main"
+            variant="body2"
+            sx={{
+              mb: 2,
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
+            {oidcErrorDescription}
+          </Typography>
+        )}
+
+        <Box component="form" onSubmit={handleFormSubmit} sx={{ width: '100%' }}>
+          <TextField
+            fullWidth
+            type="email"
+            label="Email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={formLoading || loading}
+            autoComplete="email"
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            fullWidth
+            type="password"
+            label="Mật khẩu"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={formLoading || loading}
+            autoComplete="current-password"
+            sx={{ mb: 2 }}
+          />
+
+          <Button
+            fullWidth
+            size="large"
+            type="submit"
+            color="primary"
+            variant="contained"
+            disabled={formLoading || loading}
+            sx={{ mb: 2 }}
+          >
+            {formLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          </Button>
+        </Box>
+
+        <Button
+          fullWidth
+          size="large"
+          type="button"
+          color="inherit"
+          variant="contained"
+          onClick={handleSignIn}
+          disabled={loading || formLoading}
+          sx={{ mb: 2 }}
+        >
+          {loading ? 'Đang chuyển hướng SSO...' : 'Đăng nhập với Etechs SSO'}
+        </Button>
+      </Box>
       
       <Divider sx={{ my: 3, '&::before, &::after': { borderTopStyle: 'dashed' } }}>
         <Typography
           variant="overline"
           sx={{ color: 'text.secondary', fontWeight: 'fontWeightMedium' }}
         >
-          HCMUE
+          Etechs EDS
         </Typography>
       </Divider>
       
@@ -220,9 +225,9 @@ export function SignInView() {
             color: 'text.secondary',
           }}
         >
-          Bạn đã có tài khoản chưa?
+          Tài khoản được quản lý tập trung qua Etechs SSO.
           <Link variant="subtitle2" sx={{ ml: 0.5 }} href="/sign-up">
-            Hãy bắt đầu nào
+            Xem hướng dẫn
           </Link>
         </Typography>
       </Box>

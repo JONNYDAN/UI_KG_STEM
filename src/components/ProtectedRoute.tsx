@@ -16,7 +16,7 @@ export function ProtectedRoute({
   children, 
   requiredRoles, 
   requiredGroups,
-  fallbackPath = '/sign-in' 
+  fallbackPath = '/' 
 }: ProtectedRouteProps) {
   const location = useLocation();
   const { isAuthenticated, hasRole, hasGroup, user, isLoading } = useAuth();
