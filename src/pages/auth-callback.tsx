@@ -3,19 +3,20 @@ import { useLocation } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
+import CircularProgress from '@mui/material/CircularProgress';
+
+import { useRouter } from 'src/routes/hooks';
 
 import { CONFIG } from 'src/config-global';
 import { useAuth } from 'src/contexts/AuthContext';
-import { useRouter } from 'src/routes/hooks';
+import { getProfile } from 'src/services/authService';
 import {
   clearOidcRequestStorage,
   exchangeAuthorizationCode,
   exchangeOidcTokenForAppJwt,
   getOidcRequestContext,
 } from 'src/services/oidcService';
-import { getProfile } from 'src/services/authService';
 
 const normalizeUser = (rawUser?: Record<string, any>) => ({
   id: String(rawUser?.id || rawUser?.user_id || ''),

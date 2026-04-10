@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 
+import { useRouter } from 'src/routes/hooks';
+
 import { CONFIG } from 'src/config-global';
 import { useAuth } from 'src/contexts/AuthContext';
-import { useRouter } from 'src/routes/hooks';
 import { buildOidcAuthorizeUrl } from 'src/services/oidcService';
 
 const toPathString = (fromState: any) => {
